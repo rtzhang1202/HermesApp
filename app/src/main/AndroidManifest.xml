@@ -27,6 +27,10 @@
     
     <!-- 闹钟权限 -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <!-- 日历权限 -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     
     <!-- 电话和短信权限 -->
     <uses-permission android:name="android.permission.CALL_PHONE" />

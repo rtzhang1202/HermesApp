@@ -2590,6 +2590,107 @@ object SystemToolPromptsInternal {
                                         default = "true"
                                     )
                                 )
+                        ),
+                        ToolPrompt(
+                            name = "alarm",
+                            description = "Control device alarms: set a new alarm, show the alarm list, or dismiss an alarm.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "action",
+                                        type = "string",
+                                        description = "set / show / dismiss",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "hour",
+                                        type = "integer",
+                                        description = "required for action=set, 0-23",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "minute",
+                                        type = "integer",
+                                        description = "for action=set, 0-59, default 0",
+                                        required = false,
+                                        default = "0"
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "label",
+                                        type = "string",
+                                        description = "alarm label; dismiss uses it to target a labeled alarm",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "days",
+                                        type = "string",
+                                        description = "optional repeat days for action=set: comma list of mon,tue,wed,thu,fri,sat,sun",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "skip_ui",
+                                        type = "boolean",
+                                        description = "optional, create alarm without opening the clock UI, default true",
+                                        required = false,
+                                        default = "true"
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "calendar",
+                            description = "Control calendar events: query upcoming events, create an event, or delete an event.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "action",
+                                        type = "string",
+                                        description = "query / create / delete",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "days_from_now",
+                                        type = "integer",
+                                        description = "for action=query, look ahead N days, default 7",
+                                        required = false,
+                                        default = "7"
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "title",
+                                        type = "string",
+                                        description = "required for action=create",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "start_time",
+                                        type = "integer",
+                                        description = "epoch millis for action=create, default now+1h",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "end_time",
+                                        type = "integer",
+                                        description = "epoch millis for action=create, default start+1h",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "description",
+                                        type = "string",
+                                        description = "optional event description",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "location",
+                                        type = "string",
+                                        description = "optional event location",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "event_id",
+                                        type = "integer",
+                                        description = "required for action=delete",
+                                        required = false
+                                    )
+                                )
                         )
                     )
             ),
@@ -5209,6 +5310,107 @@ object SystemToolPromptsInternal {
                                         description = "可选",
                                         required = false,
                                         default = "true"
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "alarm",
+                            description = "控制设备闹钟：设置新闹钟、打开闹钟列表或关闭闹钟。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "action",
+                                        type = "string",
+                                        description = "set（设置）/ show（查看）/ dismiss（关闭）",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "hour",
+                                        type = "integer",
+                                        description = "action=set 必填，0-23",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "minute",
+                                        type = "integer",
+                                        description = "action=set 用，0-59，默认 0",
+                                        required = false,
+                                        default = "0"
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "label",
+                                        type = "string",
+                                        description = "闹钟标签；dismiss 时按标签关闭对应闹钟",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "days",
+                                        type = "string",
+                                        description = "action=set 的重复星期，逗号分隔：mon,tue,wed,thu,fri,sat,sun",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "skip_ui",
+                                        type = "boolean",
+                                        description = "可选，true 时不打开时钟界面直接创建，默认 true",
+                                        required = false,
+                                        default = "true"
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "calendar",
+                            description = "控制日历事件：查询近期日程、创建事件或删除事件。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "action",
+                                        type = "string",
+                                        description = "query（查询）/ create（创建）/ delete（删除）",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "days_from_now",
+                                        type = "integer",
+                                        description = "action=query 用，查询未来 N 天，默认 7",
+                                        required = false,
+                                        default = "7"
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "title",
+                                        type = "string",
+                                        description = "事件标题，action=create 必填",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "start_time",
+                                        type = "integer",
+                                        description = "action=create 的开始时间（epoch 毫秒），默认当前+1小时",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "end_time",
+                                        type = "integer",
+                                        description = "action=create 的结束时间（epoch 毫秒），默认开始+1小时",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "description",
+                                        type = "string",
+                                        description = "可选，事件描述",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "location",
+                                        type = "string",
+                                        description = "可选，事件地点",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "event_id",
+                                        type = "integer",
+                                        description = "action=delete 必填（query 结果首列的 id）",
+                                        required = false
                                     )
                                 )
                         )

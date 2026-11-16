@@ -35,10 +35,14 @@ import android.content.pm.PackageManager
 import android.content.pm.ApplicationInfo
 import android.app.ActivityManager
 import android.content.ComponentName
+import android.content.ContentValues
 import android.os.Build
 import android.content.Intent
 import android.net.Uri
+import android.provider.AlarmClock
+import android.provider.CalendarContract
 import android.provider.Settings
+import java.util.Calendar
 import androidx.core.content.FileProvider
 import java.io.File
 import com.ai.assistance.operit.services.notification.OperitNotificationStore
@@ -51,7 +55,7 @@ open class StandardSystemOperationTools(private val context: Context) {
 
     companion object {
         private const val TAG = "SystemOperationTools"
-        private const val OPERIT_PACKAGE = "com.xiaomo.androidforclaw"
+        private val OPERIT_PACKAGE = com.ai.assistance.operit.BuildConfig.APPLICATION_ID
 
         private const val AI_REPLY_CHANNEL_ID = "AI_REPLY_CHANNEL"
         private const val AI_REPLY_CHANNEL_NAME = "Chat Completion Reminder"
@@ -843,6 +847,336 @@ open class StandardSystemOperationTools(private val context: Context) {
             )
         }
     }
+
+    // ============ 闹钟工具（set / show / dismiss） ============
+    open suspend fun controlAlarm(tool: AITool): ToolResult {
+        val action = tool.parameters.find { it.name == "action" }?.value?.trim()?.lowercase(Locale.ROOT) ?: "set"
+        return try {
+            when (action) {
+                "set" -> {
+                    val hour = tool.parameters.find { it.name == "hour" }?.value?.toIntOrNull()
+                    val minute = tool.parameters.find { it.name == "minute" }?.value?.toIntOrNull() ?: 0
+                    if (hour == null || hour !in 0..23 || minute !in 0..59) {
+                        return ToolResult(
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "action=set requires hour (0-23) and minute (0-59)"
+                        )
+                    }
+                    val label = tool.parameters.find { it.name == "label" }?.value?.takeIf { it.isNotBlank() } ?: "Hermes"
+                    val skipUi = tool.parameters.find { it.name == "skip_ui" }?.value != "false"
+                    val intent = Intent(AlarmClock.ACTION_SET_ALARM)
+                        .putExtra(AlarmClock.EXTRA_HOUR, hour)
+                        .putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                        .putExtra(AlarmClock.EXTRA_MESSAGE, label)
+                        .putExtra(AlarmClock.EXTRA_SKIP_UI, skipUi)
+                    val dayMap = mapOf(
+                        "sun" to Calendar.SUNDAY,
+                        "mon" to Calendar.MONDAY,
+                        "tue" to Calendar.TUESDAY,
+                        "wed" to Calendar.WEDNESDAY,
+                        "thu" to Calendar.THURSDAY,
+                        "fri" to Calendar.FRIDAY,
+                        "sat" to Calendar.SATURDAY
+                    )
+                    val dayList = arrayListOf<Int>()
+                    tool.parameters.find { it.name == "days" }?.value
+                        ?.split(",")
+                        ?.forEach { token -> dayMap[token.trim().lowercase(Locale.ROOT)]?.let { dayList.add(it) } }
+                    if (dayList.isNotEmpty()) {
+                        intent.putIntegerArrayListExtra(AlarmClock.EXTRA_DAYS, dayList)
+                    }
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    val timeText = String.format(Locale.ROOT, "%02d:%02d", hour, minute)
+                    val repeatText = if (dayList.isNotEmpty()) "repeat ${dayList.size} day(s)/week" else "one-shot"
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData("Alarm set: $label at $timeText ($repeatText)"),
+                        error = ""
+                    )
+                }
+
+                "show" -> {
+                    val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData("Opened the system alarm list"),
+                        error = ""
+                    )
+                }
+
+                "dismiss" -> {
+                    val label = tool.parameters.find { it.name == "label" }?.value?.takeIf { it.isNotBlank() }
+                    val intent = Intent(AlarmClock.ACTION_DISMISS_ALARM)
+                    if (label != null) {
+                        intent.putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_LABEL)
+                        intent.putExtra(AlarmClock.EXTRA_MESSAGE, label)
+                    } else {
+                        intent.putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_NEXT)
+                    }
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData(if (label != null) "Dismissed alarm: $label" else "Dismissed the next alarm"),
+                        error = ""
+                    )
+                }
+
+                else -> ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = StringResultData(""),
+                    error = "Unknown action '$action'. Use set / show / dismiss."
+                )
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "闹钟操作失败", e)
+            ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "Alarm operation failed: ${e.message}"
+            )
+        }
+    }
+
+    // ============ 日历工具（query / create / delete） ============
+    private fun hasPermission(perm: String): Boolean =
+        context.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
+
+    // 已 root 设备：pm grant 直接拿运行时权限，免去设置页手工授权
+    private fun tryGrantPermission(perm: String) {
+        if (hasPermission(perm)) return
+        try {
+            val process = ProcessBuilder("su", "-c", "pm grant $OPERIT_PACKAGE $perm")
+                .redirectErrorStream(true)
+                .start()
+            process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+            process.destroy()
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "pm grant 失败: $perm", e)
+        }
+    }
+
+    open suspend fun controlCalendar(tool: AITool): ToolResult {
+        val action = tool.parameters.find { it.name == "action" }?.value?.trim()?.lowercase(Locale.ROOT) ?: "query"
+        return try {
+            when (action) {
+                "query" -> {
+                    if (!hasPermission(android.Manifest.permission.READ_CALENDAR)) {
+                        tryGrantPermission(android.Manifest.permission.READ_CALENDAR)
+                    }
+                    if (!hasPermission(android.Manifest.permission.READ_CALENDAR)) {
+                        return ToolResult(
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "READ_CALENDAR permission not granted. Grant it in Settings -> Apps -> Hermes -> Permissions."
+                        )
+                    }
+                    val days = tool.parameters.find { it.name == "days_from_now" }?.value?.toIntOrNull() ?: 7
+                    val begin = System.currentTimeMillis()
+                    val end = begin + days.coerceIn(1, 365).toLong() * 86_400_000L
+                    val projection = arrayOf(
+                        CalendarContract.Instances.EVENT_ID,
+                        CalendarContract.Instances.TITLE,
+                        CalendarContract.Instances.BEGIN,
+                        CalendarContract.Instances.END,
+                        CalendarContract.Instances.EVENT_LOCATION,
+                        CalendarContract.Instances.CALENDAR_DISPLAY_NAME
+                    )
+                    val lines = mutableListOf<String>()
+                    val fmt = java.text.SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+                    CalendarContract.Instances.query(context.contentResolver, projection, begin, end)?.use { cursor ->
+                        val idIdx = cursor.getColumnIndex(CalendarContract.Instances.EVENT_ID)
+                        val titleIdx = cursor.getColumnIndex(CalendarContract.Instances.TITLE)
+                        val beginIdx = cursor.getColumnIndex(CalendarContract.Instances.BEGIN)
+                        val endIdx = cursor.getColumnIndex(CalendarContract.Instances.END)
+                        val locIdx = cursor.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
+                        val calIdx = cursor.getColumnIndex(CalendarContract.Instances.CALENDAR_DISPLAY_NAME)
+                        while (cursor.moveToNext() && lines.size < 50) {
+                            val id = cursor.getLong(idIdx)
+                            val b = cursor.getLong(beginIdx)
+                            val e = cursor.getLong(endIdx)
+                            val title = cursor.getString(titleIdx) ?: "(untitled)"
+                            val loc = cursor.getString(locIdx)?.takeIf { it.isNotBlank() }
+                            val cal = cursor.getString(calIdx)?.takeIf { it.isNotBlank() }
+                            val sb = StringBuilder()
+                                .append("[id=")
+                                .append(id)
+                                .append("] ")
+                                .append(fmt.format(java.util.Date(b)))
+                                .append(" ~ ")
+                                .append(fmt.format(java.util.Date(e)))
+                                .append(" | ")
+                                .append(title)
+                            if (!loc.isNullOrEmpty()) sb.append(" @ ").append(loc)
+                            if (!cal.isNullOrEmpty()) sb.append(" [").append(cal).append("]")
+                            lines.add(sb.toString())
+                        }
+                    }
+                    if (lines.isEmpty()) {
+                        ToolResult(
+                            toolName = tool.name,
+                            success = true,
+                            result = StringResultData("No events in the next $days day(s)."),
+                            error = ""
+                        )
+                    } else {
+                        ToolResult(
+                            toolName = tool.name,
+                            success = true,
+                            result = StringResultData("Upcoming events (${lines.size}):\n" + lines.joinToString("\n")),
+                            error = ""
+                        )
+                    }
+                }
+
+                "create" -> {
+                    val title = tool.parameters.find { it.name == "title" }?.value?.takeIf { it.isNotBlank() }
+                    if (title == null) {
+                        return ToolResult(
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "action=create requires title"
+                        )
+                    }
+                    val start = tool.parameters.find { it.name == "start_time" }?.value?.toLongOrNull()
+                        ?: (System.currentTimeMillis() + 3_600_000L)
+                    val end = tool.parameters.find { it.name == "end_time" }?.value?.toLongOrNull()
+                        ?: (start + 3_600_000L)
+                    val description = tool.parameters.find { it.name == "description" }?.value?.takeIf { it.isNotBlank() }
+                    val location = tool.parameters.find { it.name == "location" }?.value?.takeIf { it.isNotBlank() }
+
+                    if (!hasPermission(android.Manifest.permission.WRITE_CALENDAR)) {
+                        tryGrantPermission(android.Manifest.permission.WRITE_CALENDAR)
+                    }
+                    if (hasPermission(android.Manifest.permission.WRITE_CALENDAR)) {
+                        // 直接写入主日历
+                        val calendarId = resolveWritableCalendarId()
+                        if (calendarId == null) {
+                            return ToolResult(
+                                toolName = tool.name,
+                                success = false,
+                                result = StringResultData(""),
+                                error = "No writable calendar found on this device."
+                            )
+                        }
+                        val values = ContentValues().apply {
+                            put(CalendarContract.Events.CALENDAR_ID, calendarId)
+                            put(CalendarContract.Events.TITLE, title)
+                            put(CalendarContract.Events.DTSTART, start)
+                            put(CalendarContract.Events.DTEND, end)
+                            put(CalendarContract.Events.EVENT_TIMEZONE, java.util.TimeZone.getDefault().id)
+                            if (description != null) put(CalendarContract.Events.DESCRIPTION, description)
+                            if (location != null) put(CalendarContract.Events.EVENT_LOCATION, location)
+                        }
+                        val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+                        val eventId = uri?.lastPathSegment
+                        if (eventId != null) {
+                            ToolResult(
+                                toolName = tool.name,
+                                success = true,
+                                result = StringResultData("Event created: '$title' (id=$eventId, ${fmtMillis(start)} ~ ${fmtMillis(end)})"),
+                                error = ""
+                            )
+                        } else {
+                            ToolResult(
+                                toolName = tool.name,
+                                success = false,
+                                result = StringResultData(""),
+                                error = "Calendar insert failed (contentResolver.insert returned null)."
+                            )
+                        }
+                    } else {
+                        // 无写权限时降级：唤起系统日历新建界面，由用户确认保存
+                        val intent = Intent(Intent.ACTION_INSERT)
+                            .setData(CalendarContract.Events.CONTENT_URI)
+                            .putExtra(CalendarContract.Events.TITLE, title)
+                            .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start)
+                            .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end)
+                        if (description != null) intent.putExtra(CalendarContract.Events.DESCRIPTION, description)
+                        if (location != null) intent.putExtra(CalendarContract.Events.EVENT_LOCATION, location)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        ToolResult(
+                            toolName = tool.name,
+                            success = true,
+                            result = StringResultData("Opened calendar create UI for '$title' (WRITE_CALENDAR not granted, please confirm in the calendar app)"),
+                            error = ""
+                        )
+                    }
+                }
+
+                "delete" -> {
+                    val eventId = tool.parameters.find { it.name == "event_id" }?.value?.toLongOrNull()
+                    if (eventId == null) {
+                        return ToolResult(
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "action=delete requires event_id (use action=query to list ids first... note: ids are not shown in query output yet, pass the id from your calendar app)"
+                        )
+                    }
+                    if (!hasPermission(android.Manifest.permission.WRITE_CALENDAR)) {
+                        tryGrantPermission(android.Manifest.permission.WRITE_CALENDAR)
+                    }
+                    if (!hasPermission(android.Manifest.permission.WRITE_CALENDAR)) {
+                        return ToolResult(
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "WRITE_CALENDAR permission not granted."
+                        )
+                    }
+                    val uri = android.content.ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+                    val rows = context.contentResolver.delete(uri, null, null)
+                    ToolResult(
+                        toolName = tool.name,
+                        success = rows > 0,
+                        result = StringResultData(if (rows > 0) "Deleted event id=$eventId" else "No event matched id=$eventId"),
+                        error = if (rows > 0) "" else "Event not found or not deletable."
+                    )
+                }
+
+                else -> ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = StringResultData(""),
+                    error = "Unknown action '$action'. Use query / create / delete."
+                )
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "日历操作失败", e)
+            ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "Calendar operation failed: ${e.message}"
+            )
+        }
+    }
+
+    private fun resolveWritableCalendarId(): Long? {
+        val projection = arrayOf(CalendarContract.Calendars._ID)
+        val selection = "${CalendarContract.Calendars.VISIBLE} = 1 AND ${CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL} >= ${CalendarContract.Calendars.CAL_ACCESS_OWNER}"
+        val sortOrder = "${CalendarContract.Calendars.IS_PRIMARY} DESC"
+        context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, projection, selection, null, sortOrder)?.use { c ->
+            if (c.moveToFirst()) return c.getLong(0)
+        }
+        return null
+    }
+
+    private fun fmtMillis(millis: Long): String =
+        java.text.SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(java.util.Date(millis))
 
     /** 获取设备位置信息 通过系统API获取当前设备位置 */
     suspend fun getDeviceLocation(tool: AITool): ToolResult {

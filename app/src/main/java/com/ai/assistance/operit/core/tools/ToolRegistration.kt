@@ -1995,6 +1995,30 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             }
     )
 
+    // 闹钟控制（设置/查看/关闭）
+    handler.registerTool(
+            name = "alarm",
+            descriptionGenerator = { tool ->
+                val action = tool.parameters.find { it.name == "action" }?.value ?: "set"
+                "Control device alarms (current action=$action: set a new alarm, show the alarm list, or dismiss)"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { systemOperationTools.controlAlarm(tool) }
+            }
+    )
+
+    // 日历控制（查询/创建/删除）
+    handler.registerTool(
+            name = "calendar",
+            descriptionGenerator = { tool ->
+                val action = tool.parameters.find { it.name == "action" }?.value ?: "query"
+                "Control calendar events (current action=$action: query upcoming events, create an event, or delete)"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { systemOperationTools.controlCalendar(tool) }
+            }
+    )
+
     // 获取当前页面/窗口信息
     handler.registerTool(
             name = "get_page_info",
