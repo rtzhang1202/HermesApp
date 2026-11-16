@@ -55,7 +55,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.xiaomo.androidforclaw"
+        applicationId = "com.xiaomo.androidforclaw.rtz"
         minSdk = 26
         targetSdk = 35
         versionCode = 52

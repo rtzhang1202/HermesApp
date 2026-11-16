@@ -352,7 +352,7 @@ class AnrMonitor(
     private fun analyzeStackTrace(stackTrace: String): String {
         val analysis = StringBuilder()
         val appPackages = listOf(
-            "com.xiaomo.androidforclaw",
+            "com.xiaomo.androidforclaw.rtz",
             "com.ai.assistance.operit",
             "com.xiaomo.hermes"
         )
