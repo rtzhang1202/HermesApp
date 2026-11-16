@@ -36,6 +36,7 @@ enum class ApiProviderType {
         LLAMA_CPP, // llama.cpp 本地推理引擎
         PPINFRA, // 派欧云
         NOVITA, // Novita AI
+        FASTAPI, // 自研 FastAPI 服务（OpenAI 兼容）
         OTHER // 其他提供商（自定义端点）
 }
 

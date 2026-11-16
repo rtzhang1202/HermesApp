@@ -290,7 +290,8 @@ fun ModelApiSettingsSection(
             selectedApiProvider == ApiProviderType.OTHER ||
             selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
             selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
-            selectedApiProvider == ApiProviderType.OLLAMA
+            selectedApiProvider == ApiProviderType.OLLAMA ||
+            selectedApiProvider == ApiProviderType.FASTAPI
 
         if (isGenericProviderForEndpoint) {
             // 通用供应商仍保留原逻辑：只有在为空或当前就是某个默认端点时才写入默认值
@@ -372,7 +373,8 @@ fun ModelApiSettingsSection(
                 selectedApiProvider == ApiProviderType.OTHER ||
                 selectedApiProvider == ApiProviderType.GEMINI_GENERIC ||
                 selectedApiProvider == ApiProviderType.ANTHROPIC_GENERIC ||
-                selectedApiProvider == ApiProviderType.OLLAMA
+                selectedApiProvider == ApiProviderType.OLLAMA ||
+                selectedApiProvider == ApiProviderType.FASTAPI
 
             val isMnnProvider = selectedApiProvider == ApiProviderType.MNN
             val isLlamaProvider = selectedApiProvider == ApiProviderType.LLAMA_CPP
@@ -1040,6 +1042,7 @@ private fun getProviderDisplayName(provider: ApiProviderType, context: android.c
         ApiProviderType.LLAMA_CPP -> context.getString(R.string.provider_llama_cpp)
         ApiProviderType.PPINFRA -> context.getString(R.string.provider_ppinfra)
         ApiProviderType.NOVITA -> context.getString(R.string.provider_novita)
+        ApiProviderType.FASTAPI -> context.getString(R.string.provider_fastapi)
         ApiProviderType.OTHER -> context.getString(R.string.provider_other)
     }
 }
@@ -1654,6 +1657,7 @@ private fun getProviderColor(provider: ApiProviderType): androidx.compose.ui.gra
         ApiProviderType.LLAMA_CPP -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
         ApiProviderType.PPINFRA -> MaterialTheme.colorScheme.primaryContainer
         ApiProviderType.NOVITA -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.75f)
+        ApiProviderType.FASTAPI -> MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
         ApiProviderType.OTHER -> MaterialTheme.colorScheme.surfaceVariant
     }
 }

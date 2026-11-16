@@ -113,7 +113,8 @@ object AIServiceFactory {
         return when (config.apiProviderType) {
             // OpenAI格式，支持原生和兼容OpenAI API的服务
             ApiProviderType.OPENAI,
-            ApiProviderType.OPENAI_GENERIC ->
+            ApiProviderType.OPENAI_GENERIC,
+            ApiProviderType.FASTAPI ->
                 OpenAIProvider(
                     apiEndpoint = config.apiEndpoint,
                     apiKeyProvider = apiKeyProvider,

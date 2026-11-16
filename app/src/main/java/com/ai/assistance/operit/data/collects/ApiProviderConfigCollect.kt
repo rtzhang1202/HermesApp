@@ -230,6 +230,11 @@ object ApiProviderConfigs {
             )
         ),
         ProviderApiConfig(
+            providerType = ApiProviderType.FASTAPI,
+            defaultModelName = "",
+            defaultApiEndpoint = "http://192.168.1.100:8000/v1/chat/completions"
+        ),
+        ProviderApiConfig(
             providerType = ApiProviderType.OTHER,
             defaultModelName = "",
             defaultApiEndpoint = ""
