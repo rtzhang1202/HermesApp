@@ -56,6 +56,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- 前台服务类型权限（Android 14+ 强制：startForeground 的 type 必须在 manifest 声明） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
     <queries>
         <!-- 允许查询和绑定到无障碍服务提供者应用 -->
         <package android:name="com.ai.assistance.operit.provider" />
@@ -311,12 +318,14 @@
         <service
             android:name=".services.FloatingChatService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync|specialUse" />
 
         <service
             android:name=".core.tools.system.ScreenCaptureService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <service
             android:name=".services.notification.OperitNotificationListenerService"
@@ -332,7 +341,8 @@
         <service
             android:name=".api.chat.AIForegroundService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync|specialUse|microphone" />
         
         <!-- 添加广播接收器配置 -->
         <receiver
@@ -465,7 +475,8 @@
         <service
             android:name=".services.gateway.GatewayForegroundService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <receiver
             android:name=".services.gateway.GatewayBootReceiver"

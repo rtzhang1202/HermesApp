@@ -1561,7 +1561,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "key_code",
                                         type = "string",
-                                        description = "key code, e.g. KEYCODE_HOME",
+                                        description = "key code: KEYCODE_HOME or HOME or 3; KEYCODE_BACK/BACK/4; KEYCODE_RECENTS/RECENTS/187",
                                         required = true
                                     ),
                                     ToolParameterSchema(
@@ -4348,7 +4348,7 @@ object SystemToolPromptsInternal {
                                     ToolParameterSchema(
                                         name = "key_code",
                                         type = "string",
-                                        description = "按键码，例如 KEYCODE_HOME",
+                                        description = "按键码：KEYCODE_HOME 或 HOME 或 3；BACK/4；RECENTS/187",
                                         required = true
                                     ),
                                     ToolParameterSchema(

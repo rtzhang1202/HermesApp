@@ -665,14 +665,15 @@ open class AccessibilityUITools(context: Context) : StandardUITools(context) {
         }
 
         try {
-            // 将字符串keyCode转换为AccessibilityService中的常量
-            val keyAction = when (keyCode) {
-                "KEYCODE_BACK" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK
-                "KEYCODE_HOME" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
-                "KEYCODE_RECENTS" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS
-                "KEYCODE_NOTIFICATIONS" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
-                "KEYCODE_QUICK_SETTINGS" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
-                "KEYCODE_POWER_DIALOG" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG
+            // 支持 "KEYCODE_HOME" / "HOME" / 数字 keycode（3=HOME, 4=BACK, 187=RECENTS）
+            val normalized = keyCode.uppercase().removePrefix("KEYCODE_")
+            val keyAction = when (normalized) {
+                "HOME", "3" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
+                "BACK", "4" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK
+                "RECENTS", "187" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS
+                "NOTIFICATIONS" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
+                "QUICK_SETTINGS" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
+                "POWER_DIALOG" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG
                         else -> null
                     }
 

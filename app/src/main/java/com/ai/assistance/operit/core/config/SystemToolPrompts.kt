@@ -84,10 +84,61 @@ object SystemToolPrompts {
                         required = false
                     )
                 )
+            ),
+            ToolPrompt(
+                name = "wait_for_element",
+                description = "Wait until a UI element matching the selector appears, then return its bounds.",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "resourceId", type = "string", description = "optional, resource id substring", required = false),
+                    ToolParameterSchema(name = "className", type = "string", description = "optional, class name substring", required = false),
+                    ToolParameterSchema(name = "text", type = "string", description = "optional, visible text substring", required = false),
+                    ToolParameterSchema(name = "contentDesc", type = "string", description = "optional, content description substring", required = false),
+                    ToolParameterSchema(name = "timeout_ms", type = "integer", description = "optional, wait budget in ms, default 5000", required = false, default = "5000")
+                )
+            ),
+            ToolPrompt(
+                name = "observe_screen",
+                description = "Observe current screen state: foreground app/activity, element count; detail=texts also returns visible texts.",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "detail", type = "string", description = "optional: summary (default) or texts (include up to 20 visible texts)", required = false, default = "summary")
+                )
+            ),
+            ToolPrompt(
+                name = "list_device_tools",
+                description = "Search available device tools by keyword; returns name + one-line description. Use it to discover extended tools (clipboard, screen_record, query_content_provider, send_sms...) not listed in this prompt.",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "query", type = "string", description = "keyword to search; empty returns all", required = false)
+                )
+            ),
+            ToolPrompt(
+                name = "alarm",
+                description = "Control device alarms: set a new alarm, show the alarm list, or dismiss an alarm.",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "action", type = "string", description = "set / show / dismiss", required = true),
+                    ToolParameterSchema(name = "hour", type = "integer", description = "required for action=set, 0-23", required = false),
+                    ToolParameterSchema(name = "minute", type = "integer", description = "for action=set, 0-59, default 0", required = false, default = "0"),
+                    ToolParameterSchema(name = "label", type = "string", description = "alarm label; dismiss uses it to target a labeled alarm", required = false),
+                    ToolParameterSchema(name = "days", type = "string", description = "optional repeat days for action=set: comma list of mon,tue,wed,thu,fri,sat,sun", required = false),
+                    ToolParameterSchema(name = "skip_ui", type = "boolean", description = "optional, create alarm without opening the clock UI, default true", required = false, default = "true")
+                )
+            ),
+            ToolPrompt(
+                name = "calendar",
+                description = "Control calendar events: query upcoming events, create an event, or delete an event.",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "action", type = "string", description = "query / create / delete", required = true),
+                    ToolParameterSchema(name = "days_from_now", type = "integer", description = "for action=query, look ahead N days, default 7", required = false, default = "7"),
+                    ToolParameterSchema(name = "title", type = "string", description = "required for action=create", required = false),
+                    ToolParameterSchema(name = "start_time", type = "integer", description = "epoch millis for action=create, default now+1h", required = false),
+                    ToolParameterSchema(name = "end_time", type = "integer", description = "epoch millis for action=create, default start+1h", required = false),
+                    ToolParameterSchema(name = "description", type = "string", description = "optional event description", required = false),
+                    ToolParameterSchema(name = "location", type = "string", description = "optional event location", required = false),
+                    ToolParameterSchema(name = "event_id", type = "integer", description = "required for action=delete", required = false)
+                )
             )
         )
     )
-    
+
     val basicToolsCn = SystemToolPromptCategory(
         categoryName = "可用工具",
         tools = listOf(
@@ -128,10 +179,61 @@ object SystemToolPrompts {
                         required = false
                     )
                 )
+            ),
+            ToolPrompt(
+                name = "wait_for_element",
+                description = "等待匹配选择器的 UI 元素出现，返回其边界坐标。",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "resourceId", type = "string", description = "可选，resource id 子串匹配", required = false),
+                    ToolParameterSchema(name = "className", type = "string", description = "可选，类名子串匹配", required = false),
+                    ToolParameterSchema(name = "text", type = "string", description = "可选，可见文本子串匹配", required = false),
+                    ToolParameterSchema(name = "contentDesc", type = "string", description = "可选，content description 子串匹配", required = false),
+                    ToolParameterSchema(name = "timeout_ms", type = "integer", description = "可选，等待预算（毫秒），默认 5000", required = false, default = "5000")
+                )
+            ),
+            ToolPrompt(
+                name = "observe_screen",
+                description = "观察当前屏幕状态：前台应用、活动、元素数；可选返回可见文本。",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "detail", type = "string", description = "可选：summary（默认）或 texts（附带最多20条可见文本）", required = false, default = "summary")
+                )
+            ),
+            ToolPrompt(
+                name = "list_device_tools",
+                description = "按关键词检索可用设备工具，返回名称+一句话说明；用于发现本提示词未列出的扩展工具（clipboard、screen_record、query_content_provider、send_sms 等）。",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "query", type = "string", description = "检索关键词；留空返回全部", required = false)
+                )
+            ),
+            ToolPrompt(
+                name = "alarm",
+                description = "控制设备闹钟：设置新闹钟、打开闹钟列表或关闭闹钟。",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "action", type = "string", description = "set（设置）/ show（查看）/ dismiss（关闭）", required = true),
+                    ToolParameterSchema(name = "hour", type = "integer", description = "action=set 必填，0-23", required = false),
+                    ToolParameterSchema(name = "minute", type = "integer", description = "action=set 用，0-59，默认 0", required = false, default = "0"),
+                    ToolParameterSchema(name = "label", type = "string", description = "闹钟标签；dismiss 时按标签关闭对应闹钟", required = false),
+                    ToolParameterSchema(name = "days", type = "string", description = "action=set 的重复星期，逗号分隔：mon,tue,wed,thu,fri,sat,sun", required = false),
+                    ToolParameterSchema(name = "skip_ui", type = "boolean", description = "可选，true 时不打开时钟界面直接创建，默认 true", required = false, default = "true")
+                )
+            ),
+            ToolPrompt(
+                name = "calendar",
+                description = "控制日历事件：查询近期日程、创建事件或删除事件。",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "action", type = "string", description = "query（查询）/ create（创建）/ delete（删除）", required = true),
+                    ToolParameterSchema(name = "days_from_now", type = "integer", description = "action=query 用，查询未来 N 天，默认 7", required = false, default = "7"),
+                    ToolParameterSchema(name = "title", type = "string", description = "事件标题，action=create 必填", required = false),
+                    ToolParameterSchema(name = "start_time", type = "integer", description = "action=create 的开始时间（epoch 毫秒），默认当前+1小时", required = false),
+                    ToolParameterSchema(name = "end_time", type = "integer", description = "action=create 的结束时间（epoch 毫秒），默认开始+1小时", required = false),
+                    ToolParameterSchema(name = "description", type = "string", description = "可选，事件描述", required = false),
+                    ToolParameterSchema(name = "location", type = "string", description = "可选，事件地点", required = false),
+                    ToolParameterSchema(name = "event_id", type = "integer", description = "action=delete 必填（query 结果首列的 id）", required = false)
+                )
             )
         )
     )
-    
+
     // ==================== 文件系统工具 ====================
     val fileSystemTools = SystemToolPromptCategory(
         categoryName = "File System Tools",

@@ -43,15 +43,18 @@ object ScreenObserver {
 
     /**
      * 把前后快照差异追加为一行 [observe] 回执。
-     * 仅当原 result 为文本型时追加（结构化结果保持原样，避免破坏下游解析）。
+     * 结构化结果（如 UIActionResultData）转换为文本一并携带——这些类型只在工具执行端构造、
+     * 下游（桥接/展示）统一走 toString，无按类型消费方，回执完整性优先。
      */
     fun appendObservation(result: ToolResult, pre: Snapshot?, post: Snapshot?): ToolResult {
         val line = buildLine(pre, post)
         val current = result.result
-        if (current !is StringResultData) {
-            return result
+        val merged = when (current) {
+            is StringResultData ->
+                if (current.value.isBlank()) line else current.value + "\n" + line
+            else ->
+                current.toString() + "\n" + line
         }
-        val merged = if (current.value.isBlank()) line else current.value + "\n" + line
         return result.copy(result = StringResultData(merged))
     }
 

@@ -654,9 +654,17 @@ class FloatingWindowManager(
 
     private fun updateViewLayout(configure: (WindowManager.LayoutParams) -> Unit = {}) {
         composeView?.let { view ->
-            val params = view.layoutParams as WindowManager.LayoutParams
+            // 守卫：视图已从窗口脱离（服务重启/模式切换竞态）时跳过，
+            // 否则 windowManager.updateViewLayout 抛 IllegalArgumentException
+            // "View ... not attached to window manager"（Android 14+ 高发）。
+            if (view.windowToken == null) return
+            val params = view.layoutParams as? WindowManager.LayoutParams ?: return
             configure(params)
-            windowManager.updateViewLayout(view, params)
+            try {
+                windowManager.updateViewLayout(view, params)
+            } catch (e: IllegalArgumentException) {
+                AppLogger.w(TAG, "updateViewLayout skipped: ${e.message}")
+            }
         }
     }
 

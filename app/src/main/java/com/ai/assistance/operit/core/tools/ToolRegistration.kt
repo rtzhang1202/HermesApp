@@ -1515,7 +1515,20 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             action: suspend (AITool) -> ToolResult
     ): ToolResult {
         val pre = ScreenObserver.capture(context)
-        val result = executeUiToolWithVisibility(tool) { action(it) }
+        // 异常也转成带回执的错误结果：验证闭环要求 agent 永远能看到动作后的屏幕状态
+        val result = try {
+            executeUiToolWithVisibility(tool) { action(it) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.e("ToolRegistration", "UI action failed", e)
+            ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = StringResultData(""),
+                    error = "action failed: ${e.message ?: e.javaClass.simpleName}"
+            )
+        }
         val post = ScreenObserver.capture(context)
         return ScreenObserver.appendObservation(result, pre, post)
     }
