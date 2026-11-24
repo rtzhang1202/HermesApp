@@ -2188,6 +2188,60 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             }
     )
 
+    // SoM 标注截图（Set-of-Mark 视觉定位：序号框 + 文本索引 + <link> 图片附件）
+    handler.registerTool(
+            name = "som_screenshot",
+            descriptionGenerator = { _ ->
+                "Capture the screen with Set-of-Mark annotation: numbered boxes on interactive/text elements plus a text index. " +
+                    "Returns an attached image link; use the [n] marks and their bounds for visual grounding."
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) {
+                    executeUiToolWithVisibility(
+                            tool = tool,
+                            showStatusIndicator = false,
+                            delayMs = 200
+                    ) { t ->
+                        val (bitmap, dims) = uiTools.captureScreenshotBitmap(t)
+                        if (bitmap == null) {
+                            ToolResult(toolName = t.name, success = false, result = StringResultData(""), error = "Screenshot failed")
+                        } else {
+                            try {
+                                val xml = com.ai.assistance.operit.data.repository.UIHierarchyManager.getUIHierarchy(context)
+                                val maxMarks = t.parameters.find { p -> p.name == "max_marks" }?.value?.toIntOrNull() ?: 40
+                                val marks = SoMAnnotator.parseMarks(xml, maxMarks, selfPackage = context.packageName)
+                                val annotated = SoMAnnotator.annotate(bitmap, marks)
+                                val gen = SoMAnnotator.nextGen()
+
+                                val somDir = java.io.File(context.filesDir, "som")
+                                somDir.mkdirs()
+                                val file = java.io.File(somDir, "som_${System.currentTimeMillis()}_g$gen.png")
+                                file.outputStream().use { out ->
+                                    annotated.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                                }
+                                if (annotated !== bitmap) annotated.recycle()
+                                bitmap.recycle()
+
+                                val poolId = com.ai.assistance.operit.util.ImagePoolManager.addImage(file.absolutePath)
+                                val sb = StringBuilder()
+                                sb.appendLine("SoM screenshot (gen=$gen): ${marks.size} mark(s), size=${dims?.first ?: 0}x${dims?.second ?: 0}.")
+                                // 无引号形式：JSON 序列化不会产生 \" 转义，MediaLinkParser 的 id 捕获组
+                                // （[^"'\s>]+）不会把反斜杠吞进 id，getImage 才能命中（带引号的转义形态会丢图）。
+                                sb.appendLine("<link type=image id=$poolId>som</link>")
+                                marks.forEachIndexed { i, m -> sb.appendLine(m.indexLine(i + 1)) }
+                                sb.append("Use the numbered marks for visual grounding; pass the mark bounds as coordinates to tap/clickElement.")
+                                ToolResult(toolName = t.name, success = true, result = StringResultData(sb.toString()), error = "")
+                            } catch (e: Exception) {
+                                com.ai.assistance.operit.util.AppLogger.e("ToolRegistration", "SoM annotate failed", e)
+                                bitmap.recycle()
+                                ToolResult(toolName = t.name, success = false, result = StringResultData(""), error = "SoM failed: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            }
+    )
+
     handler.registerTool(
             name = "run_ui_subagent",
             descriptionGenerator = { tool ->

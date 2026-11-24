@@ -135,6 +135,13 @@ object SystemToolPrompts {
                     ToolParameterSchema(name = "location", type = "string", description = "optional event location", required = false),
                     ToolParameterSchema(name = "event_id", type = "integer", description = "required for action=delete", required = false)
                 )
+            ),
+            ToolPrompt(
+                name = "som_screenshot",
+                description = "Capture the screen with Set-of-Mark annotation: numbered boxes on interactive/text elements plus a text index. Returns an attached image; use the [n] marks and their bounds for visual grounding before tapping.",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "max_marks", type = "integer", description = "optional, cap of numbered marks, default 40", required = false, default = "40")
+                )
             )
         )
     )
@@ -229,6 +236,13 @@ object SystemToolPrompts {
                     ToolParameterSchema(name = "description", type = "string", description = "可选，事件描述", required = false),
                     ToolParameterSchema(name = "location", type = "string", description = "可选，事件地点", required = false),
                     ToolParameterSchema(name = "event_id", type = "integer", description = "action=delete 必填（query 结果首列的 id）", required = false)
+                )
+            ),
+            ToolPrompt(
+                name = "som_screenshot",
+                description = "截取当前屏幕并做 Set-of-Mark 标注：给可交互/有文本元素画序号框并返回文本索引。返回附带图片；点击前用 [n] 序号与 bounds 做视觉定位。",
+                parametersStructured = listOf(
+                    ToolParameterSchema(name = "max_marks", type = "integer", description = "可选，序号框数量上限，默认 40", required = false, default = "40")
                 )
             )
         )
