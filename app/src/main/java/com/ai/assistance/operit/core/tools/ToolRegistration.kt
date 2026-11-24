@@ -3,6 +3,7 @@ package com.ai.assistance.operit.core.tools
 import android.content.Context
 import android.os.Environment
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.config.SystemToolPromptsInternal
 import com.ai.assistance.operit.core.tools.defaultTool.ToolGetter
 import com.ai.assistance.operit.core.tools.skill.SkillManager
 import com.ai.assistance.operit.data.model.AITool
@@ -1507,6 +1508,18 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
     // UI自动化工具
     val uiTools = ToolGetter.getUITools(context)
 
+    // 动作后观察（post-action observation）：动作前后各采一次屏幕快照，
+    // 把「前台应用/活动/元素数/界面是否变化」追加为 [observe] 验证回执。
+    suspend fun executeUiActionObserved(
+            tool: AITool,
+            action: suspend (AITool) -> ToolResult
+    ): ToolResult {
+        val pre = ScreenObserver.capture(context)
+        val result = executeUiToolWithVisibility(tool) { action(it) }
+        val post = ScreenObserver.capture(context)
+        return ScreenObserver.appendObservation(result, pre, post)
+    }
+
     // 点击元素
     handler.registerTool(
             name = "click_element",
@@ -1533,7 +1546,7 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) {
-                    executeUiToolWithVisibility(tool) { uiTools.clickElement(it) }
+                    executeUiActionObserved(tool) { uiTools.clickElement(it) }
                 }
             }
     )
@@ -1548,7 +1561,7 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) {
-                    executeUiToolWithVisibility(tool) { uiTools.tap(it) }
+                    executeUiActionObserved(tool) { uiTools.tap(it) }
                 }
             }
     )
@@ -1562,7 +1575,7 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) {
-                    executeUiToolWithVisibility(tool) { uiTools.longPress(it) }
+                    executeUiActionObserved(tool) { uiTools.longPress(it) }
                 }
             }
     )
@@ -2019,6 +2032,117 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             }
     )
 
+    // 等待元素出现（验证闭环基础能力，核心常驻）
+    handler.registerTool(
+            name = "wait_for_element",
+            descriptionGenerator = { tool ->
+                val selector = listOf("resourceId", "className", "text", "contentDesc")
+                    .firstNotNullOfOrNull { p -> tool.parameters.find { it.name == p }?.value?.takeIf { v -> v.isNotBlank() } }
+                    ?: "?"
+                "Wait until a UI element appears (selector: $selector), then return its bounds"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { uiTools.waitForElement(tool) }
+            }
+    )
+
+    // 屏幕状态观察（核心常驻）
+    handler.registerTool(
+            name = "observe_screen",
+            descriptionGenerator = { _ ->
+                "Observe current screen: foreground app/activity, element count; detail=texts also returns visible texts"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { uiTools.observeScreen(tool) }
+            }
+    )
+
+    // 设备工具目录检索（两级工具面入口：发现不在核心 prompt 里的扩展工具）
+    handler.registerTool(
+            name = "list_device_tools",
+            descriptionGenerator = { _ ->
+                "Search available device tools by keyword; returns name + one-line description for extended tools not listed in the core prompt"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) {
+                    val query = tool.parameters.find { it.name == "query" }?.value?.trim().orEmpty()
+                    val promptIndex = SystemToolPromptsInternal.internalToolCategoriesEn
+                        .flatMap { it.tools }
+                        .associate { it.name to it.description }
+                    val allNames = handler.getAllToolNames()
+                    val matched = allNames.filter { name ->
+                        val desc = promptIndex[name].orEmpty()
+                        query.isEmpty() || name.contains(query, true) || desc.contains(query, true)
+                    }.sorted()
+                    val lines = matched.take(80).map { name ->
+                        val desc = promptIndex[name]
+                        if (desc != null) "$name - $desc" else "$name - (extended tool, check skill docs for usage)"
+                    }
+                    val text = if (lines.isEmpty()) {
+                        "no device tools matched '$query'"
+                    } else {
+                        "matched ${matched.size} tool(s):\n" + lines.joinToString("\n")
+                    }
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData(text),
+                        error = ""
+                    )
+                }
+            }
+    )
+
+    // ---- 扩展工具（不进核心 prompt，经 list_device_tools 发现）----
+
+    // 剪贴板 get/set
+    handler.registerTool(
+            name = "clipboard",
+            descriptionGenerator = { tool ->
+                val action = tool.parameters.find { it.name == "action" }?.value ?: "get"
+                "Read or write the system clipboard (action=$action)"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { systemOperationTools.controlClipboard(tool) }
+            }
+    )
+
+    // 录屏（root screenrecord）
+    handler.registerTool(
+            name = "screen_record",
+            descriptionGenerator = { tool ->
+                val action = tool.parameters.find { it.name == "action" }?.value ?: "start"
+                "Record the screen to a file (action=$action; requires root)"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { systemOperationTools.controlScreenRecord(tool) }
+            }
+    )
+
+    // ContentProvider 查询（content query，root 优先）
+    handler.registerTool(
+            name = "query_content_provider",
+            descriptionGenerator = { tool ->
+                val uri = tool.parameters.find { it.name == "uri" }?.value ?: "content://..."
+                "Query an Android ContentProvider (uri=$uri)"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { systemOperationTools.queryContentProvider(tool) }
+            }
+    )
+
+    // 发短信（打开编辑器；Android 无静默发送 API）
+    handler.registerTool(
+            name = "send_sms",
+            descriptionGenerator = { tool ->
+                val to = tool.parameters.find { it.name == "to" }?.value ?: "?"
+                "Open the SMS composer prefilled for $to (user confirms send)"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { systemOperationTools.sendSms(tool) }
+            }
+    )
+
     // 获取当前页面/窗口信息
     handler.registerTool(
             name = "get_page_info",
@@ -2077,7 +2201,7 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) {
-                    executeUiToolWithVisibility(tool) { uiTools.setInputText(it) }
+                    executeUiActionObserved(tool) { uiTools.setInputText(it) }
                 }
             }
     )
@@ -2091,7 +2215,7 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) {
-                    executeUiToolWithVisibility(tool) { uiTools.pressKey(it) }
+                    executeUiActionObserved(tool) { uiTools.pressKey(it) }
                 }
             }
     )
@@ -2108,7 +2232,7 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) {
-                    executeUiToolWithVisibility(tool) { uiTools.swipe(it) }
+                    executeUiActionObserved(tool) { uiTools.swipe(it) }
                 }
             }
     )

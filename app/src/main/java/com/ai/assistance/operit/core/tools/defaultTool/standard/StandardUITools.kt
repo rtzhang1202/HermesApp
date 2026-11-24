@@ -21,6 +21,10 @@ import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.ToolParameter
 import com.ai.assistance.operit.data.model.ToolResult
+import com.ai.assistance.operit.data.repository.UIHierarchyManager
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
+import java.io.StringReader
 import com.ai.assistance.operit.services.FloatingChatService
 import com.ai.assistance.operit.ui.common.displays.UIOperationOverlay
 import com.ai.assistance.operit.ui.common.displays.UIAutomationProgressOverlay
@@ -303,6 +307,152 @@ open class StandardUITools(protected val context: Context) : ToolImplementations
     private var cachedMediaProjectionCaptureManager: MediaProjectionCaptureManager? = null
 
     /** Gets the current UI page/window information */
+    // ============ 等待元素出现（验证闭环基础能力） ============
+    open suspend fun waitForElement(tool: AITool): ToolResult {
+        val resourceId = tool.parameters.find { it.name == "resourceId" }?.value
+        val className = tool.parameters.find { it.name == "className" }?.value
+        val text = tool.parameters.find { it.name == "text" }?.value
+        val contentDesc = tool.parameters.find { it.name == "contentDesc" }?.value
+        val timeoutMs = tool.parameters.find { it.name == "timeout_ms" }?.value?.toLongOrNull() ?: 5000L
+        if (resourceId.isNullOrBlank() && className.isNullOrBlank() && text.isNullOrBlank() && contentDesc.isNullOrBlank()) {
+            return ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "wait_for_element requires at least one of resourceId / className / text / contentDesc"
+            )
+        }
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(500L, 60000L)
+        var attempts = 0
+        var lastCount = -1
+        while (System.currentTimeMillis() < deadline) {
+            attempts++
+            val xml = UIHierarchyManager.getUIHierarchy(context)
+            if (xml.isEmpty()) {
+                if (attempts >= 3) {
+                    return ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = "UI hierarchy unavailable - enable the accessibility service first"
+                    )
+                }
+            } else {
+                lastCount = Regex("<node").findAll(xml).count()
+                val hit = findFirstMatchingNode(xml, resourceId, className, text, contentDesc)
+                if (hit != null) {
+                    return ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData(
+                            "element found after $attempts attempt(s): " +
+                                "class=${hit.className ?: "-"} text=${hit.text ?: "-"} " +
+                                "desc=${hit.contentDesc ?: "-"} id=${hit.resourceId ?: "-"} " +
+                                "bounds=${hit.bounds ?: "-"}"
+                        ),
+                        error = ""
+                    )
+                }
+            }
+            delay(400)
+        }
+        return ToolResult(
+            toolName = tool.name,
+            success = false,
+            result = StringResultData(""),
+            error = "element not found within ${timeoutMs}ms (attempts=$attempts, last element count=$lastCount)"
+        )
+    }
+
+    private data class FoundNode(
+        val className: String?,
+        val text: String?,
+        val contentDesc: String?,
+        val resourceId: String?,
+        val bounds: String?
+    )
+
+    private fun findFirstMatchingNode(
+        xml: String,
+        resourceId: String?,
+        className: String?,
+        text: String?,
+        contentDesc: String?
+    ): FoundNode? {
+        return try {
+            val factory = XmlPullParserFactory.newInstance()
+            factory.isNamespaceAware = false
+            val parser = factory.newPullParser()
+            parser.setInput(StringReader(xml))
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                if (event == XmlPullParser.START_TAG && parser.name == "node") {
+                    val cls = parser.getAttributeValue(null, "class")
+                    val txt = parser.getAttributeValue(null, "text")
+                    val desc = parser.getAttributeValue(null, "content-desc")
+                    val id = parser.getAttributeValue(null, "resource-id")
+                    val bounds = parser.getAttributeValue(null, "bounds")
+                    val match =
+                        (resourceId.isNullOrBlank() || id?.contains(resourceId) == true) &&
+                            (className.isNullOrBlank() || cls?.contains(className) == true) &&
+                            (text.isNullOrBlank() || txt?.contains(text) == true) &&
+                            (contentDesc.isNullOrBlank() || desc?.contains(contentDesc) == true)
+                    if (match) return FoundNode(cls, txt, desc, id, bounds)
+                }
+                event = parser.next()
+            }
+            null
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "解析 UI 层次结构失败", e)
+            null
+        }
+    }
+
+    // ============ 屏幕观察（轻量状态快照） ============
+    open suspend fun observeScreen(tool: AITool): ToolResult {
+        val detail = tool.parameters.find { it.name == "detail" }?.value ?: "summary"
+        val xml = UIHierarchyManager.getUIHierarchy(context)
+        if (xml.isEmpty()) {
+            return ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "UI hierarchy unavailable - enable the accessibility service first"
+            )
+        }
+        val pkg = UIHierarchyManager.extractWindowInfo(xml).first ?: "?"
+        val activity = runCatching { UIHierarchyManager.getCurrentActivityName(context) }.getOrNull() ?: "-"
+        val count = Regex("<node").findAll(xml).count()
+        val sb = StringBuilder()
+            .append("foreground=")
+            .append(pkg)
+            .append(" activity=")
+            .append(activity)
+            .append(" elements=")
+            .append(count)
+            .append(" treeHash=")
+            .append(xml.hashCode())
+        if (detail == "texts") {
+            val texts = LinkedHashSet<String>()
+            Regex("text=\"([^\"]*)\"").findAll(xml).forEach { m ->
+                val v = m.groupValues[1].trim()
+                if (v.isNotEmpty()) texts.add(v)
+                if (texts.size >= 20) return@forEach
+            }
+            if (texts.isEmpty()) {
+                Regex("content-desc=\"([^\"]*)\"").findAll(xml).forEach { m ->
+                    val v = m.groupValues[1].trim()
+                    if (v.isNotEmpty()) texts.add(v)
+                    if (texts.size >= 20) return@forEach
+                }
+            }
+            if (texts.isNotEmpty()) {
+                sb.append("\nvisible texts:\n").append(texts.joinToString("\n"))
+            }
+        }
+        return ToolResult(toolName = tool.name, success = true, result = StringResultData(sb.toString()), error = "")
+    }
+
     open suspend fun getPageInfo(tool: AITool): ToolResult {
             return ToolResult(
                     toolName = tool.name,

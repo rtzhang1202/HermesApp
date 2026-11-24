@@ -2691,6 +2691,71 @@ object SystemToolPromptsInternal {
                                         required = false
                                     )
                                 )
+                        ),
+                        ToolPrompt(
+                            name = "wait_for_element",
+                            description = "Wait until a UI element matching the selector appears, then return its bounds.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "resourceId",
+                                        type = "string",
+                                        description = "optional, resource id substring",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "className",
+                                        type = "string",
+                                        description = "optional, class name substring",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "text",
+                                        type = "string",
+                                        description = "optional, visible text substring",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "contentDesc",
+                                        type = "string",
+                                        description = "optional, content description substring",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "timeout_ms",
+                                        type = "integer",
+                                        description = "optional, wait budget in ms, default 5000",
+                                        required = false,
+                                        default = "5000"
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "observe_screen",
+                            description = "Observe current screen state: foreground app, activity, element count; optionally visible texts.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "detail",
+                                        type = "string",
+                                        description = "optional: summary (default) or texts (include up to 20 visible texts)",
+                                        required = false,
+                                        default = "summary"
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "list_device_tools",
+                            description = "Search available device tools by keyword; returns name + one-line description. Use it to discover extended tools not listed in this prompt.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "query",
+                                        type = "string",
+                                        description = "keyword to search; empty returns all",
+                                        required = false
+                                    )
+                                )
                         )
                     )
             ),
@@ -5410,6 +5475,71 @@ object SystemToolPromptsInternal {
                                         name = "event_id",
                                         type = "integer",
                                         description = "action=delete 必填（query 结果首列的 id）",
+                                        required = false
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "wait_for_element",
+                            description = "等待匹配选择器的 UI 元素出现，返回其边界坐标。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "resourceId",
+                                        type = "string",
+                                        description = "可选，resource id 子串匹配",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "className",
+                                        type = "string",
+                                        description = "可选，类名子串匹配",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "text",
+                                        type = "string",
+                                        description = "可选，可见文本子串匹配",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "contentDesc",
+                                        type = "string",
+                                        description = "可选，content description 子串匹配",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "timeout_ms",
+                                        type = "integer",
+                                        description = "可选，等待预算（毫秒），默认 5000",
+                                        required = false,
+                                        default = "5000"
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "observe_screen",
+                            description = "观察当前屏幕状态：前台应用、活动、元素数；可选返回可见文本。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "detail",
+                                        type = "string",
+                                        description = "可选：summary（默认）或 texts（附带最多20条可见文本）",
+                                        required = false,
+                                        default = "summary"
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "list_device_tools",
+                            description = "按关键词检索可用设备工具，返回名称+一句话说明；用于发现本提示词未列出的扩展工具。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "query",
+                                        type = "string",
+                                        description = "检索关键词；留空返回全部",
                                         required = false
                                     )
                                 )

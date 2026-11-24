@@ -36,6 +36,8 @@ import android.content.pm.ApplicationInfo
 import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.ContentValues
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.os.Build
 import android.content.Intent
 import android.net.Uri
@@ -844,6 +846,244 @@ open class StandardSystemOperationTools(private val context: Context) {
                 success = false,
                 result = StringResultData(""),
                 error = "Error getting app usage time: ${e.message}"
+            )
+        }
+    }
+
+    // ============ 剪贴板（get / set） ============
+    open suspend fun controlClipboard(tool: AITool): ToolResult {
+        val action = tool.parameters.find { it.name == "action" }?.value?.trim()?.lowercase(Locale.ROOT) ?: "get"
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        if (clipboard == null) {
+            return ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "Clipboard service unavailable"
+            )
+        }
+        return when (action) {
+            "get" -> {
+                val clip = clipboard.primaryClip
+                if (clip == null || clip.itemCount == 0) {
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData("clipboard is empty"),
+                        error = ""
+                    )
+                } else {
+                    val parts = (0 until clip.itemCount).mapNotNull { i ->
+                        clip.getItemAt(i).coerceToText(context)?.toString()
+                    }
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData("clipboard (${clip.itemCount} item(s)): " + parts.joinToString(" | ").take(2000)),
+                        error = ""
+                    )
+                }
+            }
+
+            "set" -> {
+                val text = tool.parameters.find { it.name == "text" }?.value
+                if (text.isNullOrEmpty()) {
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = "action=set requires text"
+                    )
+                } else {
+                    clipboard.setPrimaryClip(ClipData.newPlainText("hermes", text))
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData("clipboard set (${text.length} chars)"),
+                        error = ""
+                    )
+                }
+            }
+
+            else -> ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "Unknown action '$action'. Use get / set."
+            )
+        }
+    }
+
+    // ============ 录屏（root: screenrecord） ============
+    open suspend fun controlScreenRecord(tool: AITool): ToolResult {
+        val action = tool.parameters.find { it.name == "action" }?.value?.trim()?.lowercase(Locale.ROOT) ?: "start"
+        return when (action) {
+            "start" -> {
+                val seconds = (tool.parameters.find { it.name == "seconds" }?.value?.toIntOrNull() ?: 10).coerceIn(5, 60)
+                val path = "/sdcard/Download/hermes_rec_${System.currentTimeMillis() / 1000}.mp4"
+                try {
+                    val process = ProcessBuilder("su", "-c", "screenrecord --time-limit $seconds $path")
+                        .redirectErrorStream(true)
+                        .start()
+                    // 同步等待录制完成（IO 线程执行，最长 60s）
+                    process.waitFor(seconds + 5L, java.util.concurrent.TimeUnit.SECONDS)
+                    val output = process.inputStream.bufferedReader().readText().take(500)
+                    process.destroy()
+                    val file = java.io.File(path)
+                    if (file.exists() && file.length() > 0) {
+                        ToolResult(
+                            toolName = tool.name,
+                            success = true,
+                            result = StringResultData("recorded ${seconds}s -> $path (${file.length() / 1024} KB)"),
+                            error = ""
+                        )
+                    } else {
+                        ToolResult(
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "screenrecord failed (root required?): $output"
+                        )
+                    }
+                } catch (e: Exception) {
+                    AppLogger.e(TAG, "录屏失败", e)
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = "screen_record requires root (su screenrecord): ${e.message}"
+                    )
+                }
+            }
+
+            "stop" -> {
+                try {
+                    val process = ProcessBuilder("su", "-c", "pkill -INT screenrecord")
+                        .redirectErrorStream(true)
+                        .start()
+                    process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+                    process.destroy()
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData("stop signal sent to screenrecord"),
+                        error = ""
+                    )
+                } catch (e: Exception) {
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = "stop failed: ${e.message}"
+                    )
+                }
+            }
+
+            else -> ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "Unknown action '$action'. Use start / stop."
+            )
+        }
+    }
+
+    // ============ ContentProvider 查询（content query） ============
+    private fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
+
+    open suspend fun queryContentProvider(tool: AITool): ToolResult {
+        val uri = tool.parameters.find { it.name == "uri" }?.value?.trim()
+        if (uri.isNullOrEmpty() || !uri.startsWith("content://")) {
+            return ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "uri is required and must start with content://"
+            )
+        }
+        val selection = tool.parameters.find { it.name == "selection" }?.value?.trim()?.takeIf { it.isNotEmpty() }
+        val limit = (tool.parameters.find { it.name == "limit" }?.value?.toIntOrNull() ?: 30).coerceIn(1, 100)
+
+        fun buildCmd(prefix: String): String =
+            prefix + "content query --uri " + shellQuote(uri) +
+                (selection?.let { " --where " + shellQuote(it) } ?: "")
+
+        return try {
+            // 优先 root（可查受限 provider），失败回退普通 shell
+            var output: String
+            var proc = ProcessBuilder("su", "-c", buildCmd(""))
+                .redirectErrorStream(true)
+                .start()
+            proc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+            output = proc.inputStream.bufferedReader().readText()
+            proc.destroy()
+            if (output.isBlank() || output.contains("Permission Denial") || output.contains("Error")) {
+                proc = ProcessBuilder("sh", "-c", buildCmd(""))
+                    .redirectErrorStream(true)
+                    .start()
+                proc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+                output = proc.inputStream.bufferedReader().readText()
+                proc.destroy()
+            }
+            if (output.isBlank()) {
+                ToolResult(
+                    toolName = tool.name,
+                    success = false,
+                    result = StringResultData(""),
+                    error = "content query returned no output (provider may not exist or is not queryable)"
+                )
+            } else {
+                val allLines = output.trim().lines()
+                val shown = allLines.take(limit).joinToString("\n") { it.take(300) }
+                val more = if (allLines.size > limit) "\n... (${allLines.size - limit} more rows truncated)" else ""
+                ToolResult(
+                    toolName = tool.name,
+                    success = true,
+                    result = StringResultData(shown + more),
+                    error = ""
+                )
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "content query 失败", e)
+            ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "content query failed: ${e.message}"
+            )
+        }
+    }
+
+    // ============ 发短信（打开编辑器，Android 无静默发送 API） ============
+    open suspend fun sendSms(tool: AITool): ToolResult {
+        val to = tool.parameters.find { it.name == "to" }?.value?.trim()
+        val message = tool.parameters.find { it.name == "message" }?.value
+        if (to.isNullOrEmpty() || message.isNullOrEmpty()) {
+            return ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "send_sms requires to and message"
+            )
+        }
+        return try {
+            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$to"))
+                .putExtra("sms_body", message)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            ToolResult(
+                toolName = tool.name,
+                success = true,
+                result = StringResultData("SMS composer opened for $to (${message.length} chars). Android has no silent-send API - confirm send in the Messages app."),
+                error = ""
+            )
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "打开短信编辑器失败", e)
+            ToolResult(
+                toolName = tool.name,
+                success = false,
+                result = StringResultData(""),
+                error = "send_sms failed: ${e.message}"
             )
         }
     }
