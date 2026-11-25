@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Voice assistant strings (voice_ prefix, English) -->
+<resources>
+    <string name="voice_title">Voice Assistant</string>
+    <string name="voice_close">Close</string>
+    <string name="voice_mic">Microphone</string>
+    <string name="voice_keyboard">Keyboard</string>
+    <string name="voice_send">Send</string>
+
+    <string name="voice_status_awake">Ready</string>
+    <string name="voice_status_listening">Listening</string>
+    <string name="voice_status_transcribing">Transcribing</string>
+    <string name="voice_status_thinking">Thinking</string>
+    <string name="voice_status_answering">Answering</string>
+    <string name="voice_status_handed_off">Handed off to background</string>
+    <string name="voice_status_followup">Listening, or type a message</string>
+    <string name="voice_status_error">Something went wrong</string>
+
+    <string name="voice_hint_listening">Speak your question, or tap the keyboard to type</string>
+    <string name="voice_hint_thinking">Composing an answer…</string>
+    <string name="voice_hint_handed_off">Background subagent is running; the result will return to this session</string>
+    <string name="voice_hint_idle">Tap the microphone to start, or type a message</string>
+
+    <string name="voice_input_hint">Type your question…</string>
+    <string name="voice_tap_to_type">Tap here to type</string>
+
+    <string name="voice_asr_unavailable">Speech recognition unavailable, switched to text input</string>
+    <string name="voice_permission_needed">Microphone permission not granted, please type instead</string>
+
+    <string name="voice_handed_off_detail">Handed off to background; result will be filled back into this session</string>
+    <string name="voice_subagent_result_prefix">[Background task result]</string>
+    <string name="voice_error_prefix">Error: </string>
+
+    <string name="voice_session_title">Voice assistant session</string>
+
+    <string name="voice_suggestion_1">Any news today?</string>
+    <string name="voice_suggestion_2">Write me a Python script</string>
+    <string name="voice_suggestion_3">Tell me a joke</string>
+
+    <color name="voice_bg">#0F0E13</color>
+    <color name="voice_accent">#8B5CF6</color>
+    <color name="voice_accent_light">#A78BFA</color>
+</resources>

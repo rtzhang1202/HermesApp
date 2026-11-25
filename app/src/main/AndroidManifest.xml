@@ -291,6 +291,30 @@
             </intent-filter>
         </activity>
 
+        <!-- Voice assistant entry (Gemini/小爱 style) for external key apps (KeyPilot) -->
+        <activity
+            android:name=".voice.VoiceAssistantActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/voice_theme"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="com.ai.assistance.operit.action.OPEN_VOICE_ASSISTANT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Broadcast wake entry for external key apps (KeyPilot) -->
+        <receiver
+            android:name=".voice.VoiceWakeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.operit.action.OPEN_VOICE_ASSISTANT" />
+            </intent-filter>
+        </receiver>
+
         <!-- Crash Report Activity -->
         <activity
             android:name=".ui.error.CrashReportActivity"

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 语音助手界面专属文案/颜色（voice_ 前缀，勿与 strings.xml 混用） -->
+<resources>
+    <string name="voice_title">语音助手</string>
+    <string name="voice_close">关闭</string>
+    <string name="voice_mic">麦克风</string>
+    <string name="voice_keyboard">键盘</string>
+    <string name="voice_send">发送</string>
+
+    <string name="voice_status_awake">准备就绪</string>
+    <string name="voice_status_listening">我在听</string>
+    <string name="voice_status_transcribing">正在识别</string>
+    <string name="voice_status_thinking">正在思考</string>
+    <string name="voice_status_answering">正在回答</string>
+    <string name="voice_status_handed_off">已交给后台处理</string>
+    <string name="voice_status_followup">我在听，或输入文字</string>
+    <string name="voice_status_error">出错了</string>
+
+    <string name="voice_hint_listening">说出你的问题，或点按键盘输入</string>
+    <string name="voice_hint_thinking">正在组织回答…</string>
+    <string name="voice_hint_handed_off">后台子代理执行中，结果会回到本会话</string>
+    <string name="voice_hint_idle">点按麦克风开始，或直接输入文字</string>
+
+    <string name="voice_input_hint">输入你的问题…</string>
+    <string name="voice_tap_to_type">点按这里输入文字</string>
+
+    <string name="voice_asr_unavailable">语音识别不可用，已切换为文字输入</string>
+    <string name="voice_permission_needed">未授予麦克风权限，请使用文字输入</string>
+
+    <string name="voice_handed_off_detail">已交给后台处理，完成后回填本会话</string>
+    <string name="voice_subagent_result_prefix">【后台任务结果】</string>
+    <string name="voice_error_prefix">出错了： </string>
+
+    <string name="voice_session_title">语音助手会话</string>
+
+    <string name="voice_suggestion_1">今天有什么新闻？</string>
+    <string name="voice_suggestion_2">帮我写一个 Python 脚本</string>
+    <string name="voice_suggestion_3">讲个笑话</string>
+
+    <color name="voice_bg">#0F0E13</color>
+    <color name="voice_accent">#8B5CF6</color>
+    <color name="voice_accent_light">#A78BFA</color>
+
+    <!-- 语音助手全屏深色主题（无 ActionBar，底部输入条由 Compose 绘制） -->
+    <style name="voice_theme" parent="Theme.Operit">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/voice_bg</item>
+        <item name="android:statusBarColor">@color/voice_bg</item>
+        <item name="android:navigationBarColor">@color/voice_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>
