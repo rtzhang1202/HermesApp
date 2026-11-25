@@ -1,28 +1,28 @@
 package com.ai.assistance.operit.core.tools.system.shell
 
 import android.accessibilityservice.AccessibilityService
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.core.tools.system.AndroidPermissionLevel
 import com.ai.assistance.operit.core.tools.system.ShellIdentity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flowOf
 
 /**
  * 基于无障碍服务的Shell命令执行器 实现ACCESSIBILITY权限级别的命令执行
  *
- * 注意：无障碍服务不是真正的shell执行方式，但可用于模拟某些操作
+ * 无障碍服务本身无法执行shell命令：本执行器以「无障碍服务已启用」作为准入门槛，
+ * 实际命令执行下沉到 StandardShellExecutor（应用进程内 shell），保证 ACCESSIBILITY
+ * 档位下 execute_shell 能真实执行并回显 stdout/stderr/exitCode。
  */
 class AccessibilityShellExecutor(private val context: Context) : ShellExecutor {
     companion object {
         private const val TAG = "AccessibilityShellExecutor"
         private var accessibilityService: AccessibilityService? = null
+
+        /** 伴生无障碍服务提供者包名（UIAccessibilityService 所在包，随 assets/accessibility.apk 安装） */
+        private const val PROVIDER_PACKAGE_NAME = "com.ai.assistance.operit.provider"
 
         /**
          * 设置全局无障碍服务引用
@@ -33,24 +33,19 @@ class AccessibilityShellExecutor(private val context: Context) : ShellExecutor {
         }
     }
 
+    private val standardExecutor by lazy { StandardShellExecutor(context) }
+
     override fun getPermissionLevel(): AndroidPermissionLevel = AndroidPermissionLevel.ACCESSIBILITY
 
     override fun isAvailable(): Boolean {
-        return isAccessibilityServiceEnabled() && accessibilityService != null
+        return isAccessibilityServiceEnabled()
     }
 
     override fun hasPermission(): ShellExecutor.PermissionStatus {
-        val serviceEnabled = isAccessibilityServiceEnabled()
-        val serviceAvailable = accessibilityService != null
-
-        return when {
-            !serviceEnabled ->
-                    ShellExecutor.PermissionStatus.denied("Accessibility service is not enabled")
-            !serviceAvailable ->
-                    ShellExecutor.PermissionStatus.denied(
-                            "Accessibility service reference is not set"
-                    )
-            else -> ShellExecutor.PermissionStatus.granted()
+        return if (isAccessibilityServiceEnabled()) {
+            ShellExecutor.PermissionStatus.granted()
+        } else {
+            ShellExecutor.PermissionStatus.denied("Accessibility service is not enabled")
         }
     }
 
@@ -79,91 +74,38 @@ class AccessibilityShellExecutor(private val context: Context) : ShellExecutor {
     }
 
     override suspend fun startProcess(command: String): ShellProcess {
-        return AccessibilityShellProcess(command, this)
+        return standardExecutor.startProcess(command)
     }
 
-    /** 检查无障碍服务是否已启用 */
+    /** 检查无障碍服务是否已启用：解析系统设置中真实启用的服务组件，匹配本应用包或伴生提供者包 */
     private fun isAccessibilityServiceEnabled(): Boolean {
-        val serviceString = context.packageName + "/.accessibility.YourAccessibilityService"
         val enabledServices =
                 Settings.Secure.getString(
                         context.contentResolver,
                         Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-                )
-                        ?: return false
+                ) ?: return false
 
-        return enabledServices.contains(serviceString)
+        return enabledServices.split(':').any { entry ->
+            val componentName = ComponentName.unflattenFromString(entry.trim())
+            componentName != null &&
+                    (componentName.packageName == context.packageName ||
+                            componentName.packageName == PROVIDER_PACKAGE_NAME)
+        }
     }
 
     override suspend fun executeCommand(
         command: String,
         identity: ShellIdentity
-    ): ShellExecutor.CommandResult =
-            withContext(Dispatchers.IO) {
-                val permStatus = hasPermission()
-                if (!permStatus.granted) {
-                    return@withContext ShellExecutor.CommandResult(false, "", permStatus.reason, -1)
-                }
-
-                AppLogger.d(TAG, "Executing command via accessibility: $command")
-
-                // 无障碍服务不能直接执行shell命令，此处应该转换为UI操作
-                // 这里仅作为一个框架，实际实现将根据应用程序需求而定
-
-                // 目前只返回错误信息
-                return@withContext ShellExecutor.CommandResult(
-                        false,
-                        "",
-                        "Accessibility service cannot directly execute shell commands. Command was: $command",
-                        -1
-                )
-
-                // 实际实现应该解析命令并转换为相应的UI自动化操作
-                // 例如:
-                // if (command.startsWith("tap")) {
-                //     // 解析坐标
-                //     // 执行点击
-                //     return@withContext ShellExecutor.CommandResult(true, "Tap executed", "", 0)
-                // }
-            }
-}
-
-/**
- * 无障碍服务的 ShellProcess 实现
- */
-private class AccessibilityShellProcess(
-    private val command: String, 
-    private val executor: AccessibilityShellExecutor
-) : ShellProcess {
-    private var completed = false
-    private var exitCode = -1
-    
-    override val stdout: Flow<String> = callbackFlow {
-        // 无障碍服务不能执行真正的shell命令，返回错误信息
-        trySend("Accessibility service cannot execute shell commands directly")
-        completed = true
-        close()
-        awaitClose { }
-    }
-
-    override val stderr: Flow<String> = callbackFlow {
-        trySend("Command: $command")
-        trySend("Accessibility service requires UI automation conversion")
-        close()
-        awaitClose { }
-    }
-
-    override val isAlive: Boolean
-        get() = !completed
-
-    override fun destroy() {
-        completed = true
-    }
-
-    override suspend fun waitFor(): Int = withContext(Dispatchers.IO) {
-        while (!completed) {
-            kotlinx.coroutines.delay(10)
+    ): ShellExecutor.CommandResult {
+        val permStatus = hasPermission()
+        if (!permStatus.granted) {
+            return ShellExecutor.CommandResult(false, "", permStatus.reason, -1)
         }
-        exitCode
-            }
+
+        AppLogger.d(TAG, "Executing command via accessibility-tier shell: $command")
+
+        // 无障碍服务不能直接执行shell命令：准入门槛（服务已启用）已在上面校验，
+        // 实际执行与输出回显下沉到标准执行器（应用进程内 sh）
+        return standardExecutor.executeCommand(command, identity)
+    }
 }

@@ -12,6 +12,11 @@ import com.ai.assistance.operit.core.tools.defaultTool.standard.StandardUITools
 import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.data.repository.UIHierarchyManager
+import com.ai.assistance.operit.core.tools.system.AndroidPermissionLevel
+import com.ai.assistance.operit.core.tools.system.ShellIdentity
+import com.ai.assistance.operit.core.tools.system.ShizukuAuthorizer
+import com.ai.assistance.operit.core.tools.system.shell.ShellExecutorFactory
+import com.ai.assistance.operit.services.accessibility.HermesAccessibilityService
 import com.ai.assistance.operit.util.OperitPaths
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -325,8 +330,9 @@ open class AccessibilityUITools(context: Context) : StandardUITools(context) {
             val centerX = rect.centerX()
             val centerY = rect.centerY()
 
-            operationOverlay.showTap(centerX, centerY)
+            // 先点击后显示反馈浮层（与 tap() 一致，避免 overlay 窗口干扰无障碍窗口追踪）
             val clickSuccess = performAccessibilityClick(centerX, centerY)
+            operationOverlay.showTap(centerX, centerY)
 
             return if (clickSuccess) {
                 // 成功后也主动隐藏overlay，不等待自动清理
@@ -452,11 +458,12 @@ open class AccessibilityUITools(context: Context) : StandardUITools(context) {
             )
         }
 
+            // 先执行点击，再显示反馈浮层：避免全屏 overlay 窗口加入/移除与无障碍窗口追踪重叠
+            // （实测 showTap 先行时 tap 时刻 rootInActiveWindow 可能为 null）
+            val result = performAccessibilityClick(x, y)
+
             // 显示点击反馈
             operationOverlay.showTap(x, y)
-
-            // 使用无障碍服务执行点击
-            val result = performAccessibilityClick(x, y)
 
                 if (result) {
                 // 成功后主动隐藏overlay
@@ -617,11 +624,57 @@ open class AccessibilityUITools(context: Context) : StandardUITools(context) {
 
     // 使用无障碍服务执行点击的辅助方法
     private suspend fun performAccessibilityClick(x: Int, y: Int): Boolean {
+        // 0) shell input tap（Shizuku/调试档可用时）：与裸 input tap 等价的注入路径，
+        //    优先使用（实测无障碍手势在本设备上可入队但目标视图不生效）
+        if (tryShellInputTap(x, y)) return true
+
+        // 1) 自有无障碍服务：节点 ACTION_CLICK（框架直接回调目标 View，不经输入注入），
+        //    无效时回退为规范两点 Path 手势
+        HermesAccessibilityService.instance?.let { service ->
+            try {
+                if (service.performClickAt(x, y)) return true
+                if (service.dispatchTapGesture(x, y)) return true
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Error performing click via own accessibility service", e)
+            }
+        }
+        // 2) 回退伴生提供者（原有链路）
+        AppLogger.d(TAG, "点击链回退伴生提供者 ($x, $y)")
         return try {
             UIHierarchyManager.performClick(context, x, y)
         } catch (e: Exception) {
             AppLogger.e(TAG, "Error performing accessibility click", e)
             return false
+        }
+    }
+
+    /**
+     * 调试档（Shizuku）可用时用 shell `input tap` 注入点击 —— 与裸 input tap 同一注入路径，
+     * 是无障碍手势失效时的可靠回退（“回退 shell input tap”）。
+     * Shizuku 不可用/未授权时返回 false，走无障碍链路。
+     */
+    private suspend fun tryShellInputTap(x: Int, y: Int): Boolean {
+        return try {
+            val debuggerExecutor = ShellExecutorFactory.getExecutor(
+                context, AndroidPermissionLevel.DEBUGGER
+            )
+            if (!debuggerExecutor.isAvailable()) return false
+            val perm = debuggerExecutor.hasPermission()
+            if (!perm.granted) {
+                // Shizuku 在跑但未授权本应用：触发授权弹窗（验收侧批准后重试即可用）
+                AppLogger.d(TAG, "Shizuku 未授权，请求授权: ${perm.reason}")
+                ShizukuAuthorizer.requestShizukuPermission { }
+                return false
+            }
+            val result = debuggerExecutor.executeCommand("input tap $x $y", ShellIdentity.SHELL)
+            AppLogger.d(
+                TAG,
+                "shell input tap ($x, $y): success=${result.success} exit=${result.exitCode} stderr=${result.stderr.take(160)}"
+            )
+            result.success
+        } catch (e: Exception) {
+            AppLogger.d(TAG, "shell input tap 不可用: ${e.message}")
+            false
         }
     }
 

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -117,10 +118,10 @@ fun MessageDisplay(
                 Spacer(modifier = Modifier.height(60.dp))
             }
 
-            items(
+            itemsIndexed(
                 items = displayMessages,
-                key = { it.timestamp }
-            ) { message ->
+                key = { index, message -> "${message.timestamp}_$index" }
+            ) { index, message ->
                 BubbleStyleChatMessage(
                     message = message,
                     userMessageColor = userMessageColor,

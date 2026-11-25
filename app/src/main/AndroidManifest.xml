@@ -19,6 +19,7 @@
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
@@ -320,6 +321,20 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync|specialUse" />
+
+        <!-- 自有无障碍服务：节点级 ACTION_CLICK / 规范手势点击（伴生提供者手势在目标视图上无效的修复），
+             同时为 AccessibilityShellExecutor 提供真实服务名 -->
+        <service
+            android:name="com.ai.assistance.operit.services.accessibility.HermesAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
         <service
             android:name=".core.tools.system.ScreenCaptureService"
