@@ -53,7 +53,7 @@ enum class PublishArtifactType(
         titleLabel = "Script",
         marketLabel = SCRIPT_MARKET_LABEL,
         marketLabelColor = "0e8a16",
-        marketLabelDescription = "Published script artifacts managed by Operit."
+        marketLabelDescription = "Published script artifacts managed by Hermes."
     ),
     PACKAGE(
         wireValue = "package",
@@ -62,7 +62,7 @@ enum class PublishArtifactType(
         titleLabel = "Package",
         marketLabel = PACKAGE_MARKET_LABEL,
         marketLabelColor = "1d76db",
-        marketLabelDescription = "Published package artifacts managed by Operit."
+        marketLabelDescription = "Published package artifacts managed by Hermes."
     );
 
     fun marketDefinition(): GitHubIssueMarketDefinition {

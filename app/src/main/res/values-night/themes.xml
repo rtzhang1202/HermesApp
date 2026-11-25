@@ -13,6 +13,7 @@
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
-        <!-- Customize your theme here. -->
+        <!-- Hermes 深底启动窗口 -->
+        <item name="android:windowBackground">#FF0F0E13</item>
     </style>
 </resources>

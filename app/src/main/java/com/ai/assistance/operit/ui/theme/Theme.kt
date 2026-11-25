@@ -67,23 +67,39 @@ import io.github.fletchmckee.liquid.liquefiable
 import io.github.fletchmckee.liquid.rememberLiquidState
 
 private val DarkColorScheme =
-        darkColorScheme(primary = Purple80, secondary = PurpleGrey80, tertiary = Pink80)
+        darkColorScheme(
+                primary = Purple80,
+                onPrimary = Color.White,
+                secondary = PurpleGrey80,
+                onSecondary = Color(0xFF0F0E13),
+                tertiary = Pink80,
+                onTertiary = Color(0xFF0F0E13),
+                background = Color(0xFF0F0E13),
+                onBackground = Color(0xFFF4F2F8),
+                surface = Color(0xFF0F0E13),
+                onSurface = Color(0xFFF4F2F8),
+                surfaceVariant = Color(alpha = 0.06f, red = 1f, green = 1f, blue = 1f),
+                onSurfaceVariant = Color(0xFF9CA3AF),
+                surfaceContainerLowest = Color(0xFF141318),
+                surfaceContainerLow = Color(0xFF19181C),
+                surfaceContainer = Color(0xFF1D1C21),
+                surfaceContainerHigh = Color(0xFF222126),
+                surfaceContainerHighest = Color(0xFF27262B),
+        )
 
 private val LightColorScheme =
         lightColorScheme(
                 primary = Purple40,
-                secondary = PurpleGrey40,
-                tertiary = Pink40,
-
-                /* Other default colors to override
-                background = Color(0xFFFFFBFE),
-                surface = Color(0xFFFFFBFE),
                 onPrimary = Color.White,
-                onSecondary = Color.White,
+                secondary = PurpleGrey40,
+                onSecondary = Color(0xFF0F0E13),
+                tertiary = Pink40,
                 onTertiary = Color.White,
-                onBackground = Color(0xFF1C1B1F),
-                onSurface = Color(0xFF1C1B1F),
-                */
+                background = Color(0xFFF4F2F8),
+                onBackground = Color(0xFF0F0E13),
+                surface = Color(0xFFF4F2F8),
+                onSurface = Color(0xFF0F0E13),
+                surfaceVariant = Color(alpha = 0.06f, red = 15f / 255f, green = 14f / 255f, blue = 19f / 255f),
                 )
 
 
@@ -95,10 +111,10 @@ fun OperitTheme(content: @Composable () -> Unit) {
     val coroutineScope = rememberCoroutineScope()
 
     // 获取主题设置
-    val useSystemTheme by preferencesManager.useSystemTheme.collectAsState(initial = true)
+    val useSystemTheme by preferencesManager.useSystemTheme.collectAsState(initial = false)
     val themeMode by
             preferencesManager.themeMode.collectAsState(
-                    initial = UserPreferencesManager.THEME_MODE_LIGHT
+                    initial = UserPreferencesManager.THEME_MODE_DARK
             )
     val useCustomColors by preferencesManager.useCustomColors.collectAsState(initial = false)
     val customPrimaryColor by preferencesManager.customPrimaryColor.collectAsState(initial = null)
@@ -163,8 +179,8 @@ fun OperitTheme(content: @Composable () -> Unit) {
                 themeMode == UserPreferencesManager.THEME_MODE_DARK
             }
 
-    // Dynamic color is available on Android 12+
-    val dynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    // Hermes 品牌色固定：禁用壁纸动态取色，确保官方设计令牌生效
+    val dynamicColor = false
 
     // 基础主题色调
     var colorScheme =

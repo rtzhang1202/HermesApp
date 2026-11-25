@@ -2,12 +2,12 @@
 {
   name: "operit_editor"
   display_name: {
-    zh: "Operit平台编辑器"
-    en: "Operit Platform Editor"
+    zh: "Hermes平台编辑器"
+    en: "Hermes Platform Editor"
   }
   description: {
-    zh: '''Operit 平台配置直改工具包：提供一组可直接读取与修改 Operit 平台设置的工具，覆盖 MCP、Skill、Sandbox Package、功能模型绑定、模型参数、上下文总结与 TTS/STT 语音服务配置。'''
-    en: '''Direct Operit platform configuration toolkit: a collection of tools for reading and directly modifying Operit platform settings, covering MCP, Skill, Sandbox Package, function-model bindings, model parameters, context-summary settings, and TTS/STT speech-service configuration.'''
+    zh: '''Hermes 平台配置直改工具包：提供一组可直接读取与修改 Hermes 平台设置的工具，覆盖 MCP、Skill、Sandbox Package、功能模型绑定、模型参数、上下文总结与 TTS/STT 语音服务配置。'''
+    en: '''Direct Hermes platform configuration toolkit: a collection of tools for reading and directly modifying Hermes platform settings, covering MCP, Skill, Sandbox Package, function-model bindings, model parameters, context-summary settings, and TTS/STT speech-service configuration.'''
   }
 
   enabledByDefault: true
@@ -22,7 +22,7 @@
 【触发条件】
 - 用户提到 MCP/Skill 安装失败、无法启动、工具不出现、导入失败、重名冲突、配置文件怎么改
 - 用户提到沙盒包（Package）开关、内置包列表、导入删除路径、包启用状态异常
-- 用户让你排查 Operit 的插件配置路径、部署目录、开关状态、环境变量
+- 用户让你排查 Hermes 的插件配置路径、部署目录、开关状态、环境变量
 - 用户提到功能模型绑定、模型配置新增/删除/修改、模型连接测试
 - 用户提到 TTS/STT 语音服务不会配置、参数太多不会填、语音播报/语音识别不可用
 - 问题核心是“配置和部署链路”，而不是普通问答

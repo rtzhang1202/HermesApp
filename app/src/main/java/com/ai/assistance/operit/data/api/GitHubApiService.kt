@@ -216,7 +216,7 @@ class GitHubApiService(private val context: Context) {
         .addInterceptor { chain ->
             val request = chain.request()
             val builder = request.newBuilder()
-                .addHeader("User-Agent", "Operit-MCP-Client")
+                .addHeader("User-Agent", "Hermes-MCP-Client")
             if (request.header("Accept") == null) {
                 builder.addHeader("Accept", "application/vnd.github.v3+json")
             }

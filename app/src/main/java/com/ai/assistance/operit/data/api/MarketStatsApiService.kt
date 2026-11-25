@@ -176,7 +176,7 @@ class MarketStatsApiService {
     companion object {
         const val STATIC_BASE_URL = "https://static.operit.app/market-stats"
         const val TRACK_BASE_URL = "https://api.operit.app/market-stats"
-        private const val USER_AGENT = "Operit-Market-Stats"
+        private const val USER_AGENT = "Hermes-Market-Stats"
         private const val TIMEOUT_SECONDS = 15L
         private const val STATIC_CACHE_SIZE_BYTES = 8L * 1024L * 1024L
 

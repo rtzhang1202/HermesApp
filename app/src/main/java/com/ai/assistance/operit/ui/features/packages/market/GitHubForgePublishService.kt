@@ -230,7 +230,7 @@ class GitHubForgePublishService(
                 buildString {
                     appendLine("# HermesForge")
                     appendLine()
-                    appendLine("This repository stores release assets published from Operit.")
+                    appendLine("This repository stores release assets published from Hermes.")
                 }
         )
     }

@@ -1014,7 +1014,7 @@
     <string name="overlay_permission">Izin Overlay</string>
     <string name="battery_optimization">Pengecualian Optimasi Baterai</string>
     <string name="location_permission">Izin Lokasi</string>
-    <string name="operit_terminal">OperitTerminal</string>
+    <string name="operit_terminal">HermesTerminal</string>
     <string name="permission_level_standard">Izin Standar</string>
     <string name="permission_level_accessibility">Izin Aksesibilitas</string>
     <string name="permission_level_admin">Izin Administrator</string>
@@ -2525,17 +2525,17 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="perm_desc_read_sms">Izinkan aplikasi membaca SMS</string>
     <string name="perm_desc_receive_wap_push">Izinkan aplikasi menerima pesan push WAP</string>
     <string name="perm_desc_receive_mms">Izinkan aplikasi menerima MMS</string>
-    <string name="operit_terminal_wizard_title">Panduan Pengaturan OperitTerminal</string>
-    <string name="operit_terminal_not_installed">OperitTerminal belum terinstal</string>
-    <string name="operit_terminal_update_available">Pembaruan OperitTerminal tersedia</string>
-    <string name="operit_terminal_up_to_date">OperitTerminal sudah versi terbaru</string>
-    <string name="operit_terminal_install_description">OperitTerminal adalah aplikasi terminal yang kuat, menyediakan lingkungan Linux lengkap dan fungsi manajemen paket. Kita perlu menginstal aplikasi ini terlebih dahulu.</string>
-    <string name="operit_terminal_install_button">Instal OperitTerminal</string>
-    <string name="operit_terminal_update_description">Versi baru OperitTerminal ditemukan, disarankan untuk memperbarui demi fungsi dan kompatibilitas yang lebih baik.</string>
+    <string name="operit_terminal_wizard_title">Panduan Pengaturan HermesTerminal</string>
+    <string name="operit_terminal_not_installed">HermesTerminal belum terinstal</string>
+    <string name="operit_terminal_update_available">Pembaruan HermesTerminal tersedia</string>
+    <string name="operit_terminal_up_to_date">HermesTerminal sudah versi terbaru</string>
+    <string name="operit_terminal_install_description">HermesTerminal adalah aplikasi terminal yang kuat, menyediakan lingkungan Linux lengkap dan fungsi manajemen paket. Kita perlu menginstal aplikasi ini terlebih dahulu.</string>
+    <string name="operit_terminal_install_button">Instal HermesTerminal</string>
+    <string name="operit_terminal_update_description">Versi baru HermesTerminal ditemukan, disarankan untuk memperbarui demi fungsi dan kompatibilitas yang lebih baik.</string>
     <string name="operit_terminal_release_notes">Catatan rilis: %1$s</string>
-    <string name="operit_terminal_update_button">Perbarui OperitTerminal</string>
-    <string name="operit_terminal_latest_description">Selamat! Anda telah menginstal versi terbaru OperitTerminal, siap menggunakan fungsi terminal yang kuat.</string>
-    <string name="operit_terminal_open_button">Buka OperitTerminal</string>
+    <string name="operit_terminal_update_button">Perbarui HermesTerminal</string>
+    <string name="operit_terminal_latest_description">Selamat! Anda telah menginstal versi terbaru HermesTerminal, siap menggunakan fungsi terminal yang kuat.</string>
+    <string name="operit_terminal_open_button">Buka HermesTerminal</string>
     <string name="functional_model_config_title">Pengaturan Konfigurasi Model Fungsional</string>
     <string name="functional_model_config_desc">Atur konfigurasi model terpisah untuk fungsi yang berbeda, sehingga setiap fungsi dapat menggunakan pengaturan API yang paling sesuai.</string>
     <string name="manage_all_model_configs">Kelola semua konfigurasi model</string>
@@ -4102,7 +4102,7 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="mcp_issue_body_install_step3">3. Masukkan alamat repositori: `%1$s`</string>
     <string name="mcp_issue_body_install_step4">4. Atur nama plugin dan klik impor</string>
     <string name="mcp_issue_body_title_tech_info">## Informasi Teknis</string>
-    <string name="mcp_issue_body_tech_platform">- **Platform Rilis:** Pasar Operit MCP</string>
+    <string name="mcp_issue_body_tech_platform">- **Platform Rilis:** Pasar Hermes MCP</string>
     <string name="mcp_issue_body_tech_publish_time">- **Waktu Rilis:** %1$s</string>
     <string name="mcp_issue_body_footer_note">*Issue ini dibuat otomatis oleh Hermes*</string>
     <string name="mcp_publish_body_section_plugin_info">## 📋 Informasi Plugin</string>
@@ -4123,7 +4123,7 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="mcp_publish_body_section_tech_info">## 🛠️ Informasi Teknis</string>
     <string name="mcp_publish_body_table_header">| Item | Nilai |</string>
     <string name="mcp_publish_body_table_separator">|------|-----|</string>
-    <string name="mcp_publish_body_table_row_platform">| Platform Rilis | Pasar Operit MCP |</string>
+    <string name="mcp_publish_body_table_row_platform">| Platform Rilis | Pasar Hermes MCP |</string>
     <string name="mcp_publish_body_table_row_parser_version">| Versi Parser | 1.0 |</string>
     <string name="mcp_publish_body_table_row_publish_time">| Waktu Rilis | %1$s |</string>
     <string name="mcp_plugin_detail_title">Detail Plugin</string>
@@ -4873,7 +4873,7 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
 
     <string name="logcat_mediestore_save_failed">MediaStore gagal menyimpan: %1$s</string>
     <string name="logcat_cannot_create_download_dir">Tidak dapat membuat direktori unduhan</string>
-    <string name="logcat_cannot_create_operit_dir">Tidak dapat membuat direktori operit</string>
+    <string name="logcat_cannot_create_operit_dir">Tidak dapat membuat direktori Hermes</string>
     <string name="logcat_file_create_failed">Gagal membuat file atau file kosong</string>
     <string name="logcat_filesystem_save_failed">Sistem file gagal menyimpan: %1$s</string>
     <string name="backup_export_failed_create_file">Ekspor gagal: Tidak dapat membuat file</string>
@@ -5326,7 +5326,7 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="skill_publish_body_section_tech_info">## 🛠️ Informasi Teknis</string>
     <string name="skill_publish_body_table_header">| Item | Nilai |</string>
     <string name="skill_publish_body_table_separator">|------|-----|</string>
-    <string name="skill_publish_body_table_row_platform">| Platform Publikasi | Pasar Operit Skill |</string>
+    <string name="skill_publish_body_table_row_platform">| Platform Publikasi | Pasar Hermes Skill |</string>
     <string name="skill_publish_body_table_row_parser_version">| Versi Parser | 1.0 |</string>
     <string name="skill_publish_body_table_row_publish_time">| Waktu Publikasi | %1$s |</string>
     <string name="model_param_max_tokens">Jumlah Token Maksimum</string>
@@ -5690,7 +5690,7 @@ Sekarang Anda dapat menggunakan mode AutoGLM di antarmuka percakapan.</string>
     <string name="demo_cmd_list_activities">Lihat Aktivitas yang Berjalan</string>
     <string name="demo_cmd_list_services">Daftar Layanan Sistem</string>
     <string name="demo_cmd_check_resolution">Lihat Resolusi Layar</string>
-    <string name="demo_cmd_echo_hello">Cetak Hello OperitTerminal</string>
+    <string name="demo_cmd_echo_hello">Cetak Hello HermesTerminal</string>
     <string name="demo_cmd_list_files">Daftar File dan Direktori</string>
     <string name="demo_cmd_show_user">Tampilkan Pengguna Saat Ini</string>
     <string name="demo_cmd_update_package_manager">Perbarui Manajer Paket (Ubuntu)</string>

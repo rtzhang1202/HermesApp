@@ -11,7 +11,7 @@
         <item name="colorOnSecondary">@color/black</item>
         <!-- Declare support for drawing into the status bar / display cutout area. -->
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-        <!-- Customize your theme here. -->
-        
+        <!-- Hermes 深底启动窗口 -->
+        <item name="android:windowBackground">#FF0F0E13</item>
     </style>
 </resources>

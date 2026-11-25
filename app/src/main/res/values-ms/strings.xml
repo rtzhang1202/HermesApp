@@ -1298,7 +1298,7 @@
     <string name="reply_message">Balas</string>
     <string name="stop_reading">Hentikan Bacaan</string>
 
-    <string name="operit_terminal">OperitTerminal</string>
+    <string name="operit_terminal">HermesTerminal</string>
     <string name="permission_level_standard">Kebenaran Standard</string>
     <string name="permission_level_accessibility">Kebenaran Aksesibiliti</string>
     <string name="permission_level_admin">Kebenaran Pentadbir</string>
@@ -2600,18 +2600,18 @@
     <string name="perm_desc_read_sms">Benarkan aplikasi membaca SMS</string>
     <string name="perm_desc_receive_wap_push">Benarkan aplikasi menerima mesej tolakan WAP</string>
     <string name="perm_desc_receive_mms">Benarkan aplikasi menerima MMS</string>
-    <string name="operit_terminal_wizard_title">Panduan Persediaan OperitTerminal</string>
-    <string name="operit_terminal_not_installed">OperitTerminal tidak dipasang</string>
-    <string name="operit_terminal_update_available">Kemas kini OperitTerminal tersedia</string>
-    <string name="operit_terminal_up_to_date">OperitTerminal sudah versi terkini</string>
-    <string name="operit_terminal_install_description">OperitTerminal ialah aplikasi terminal yang berkuasa, menawarkan persekitaran Linux lengkap dan fungsi pengurusan pakej. Kami perlu memasang aplikasi ini terlebih dahulu.</string>
-    <string name="operit_terminal_install_button">Pasang OperitTerminal</string>
+    <string name="operit_terminal_wizard_title">Panduan Persediaan HermesTerminal</string>
+    <string name="operit_terminal_not_installed">HermesTerminal tidak dipasang</string>
+    <string name="operit_terminal_update_available">Kemas kini HermesTerminal tersedia</string>
+    <string name="operit_terminal_up_to_date">HermesTerminal sudah versi terkini</string>
+    <string name="operit_terminal_install_description">HermesTerminal ialah aplikasi terminal yang berkuasa, menawarkan persekitaran Linux lengkap dan fungsi pengurusan pakej. Kami perlu memasang aplikasi ini terlebih dahulu.</string>
+    <string name="operit_terminal_install_button">Pasang HermesTerminal</string>
 
-    <string name="operit_terminal_update_description">Versi baharu OperitTerminal ditemui, disyorkan untuk dikemas kini bagi mendapatkan fungsi dan keserasian yang lebih baik.</string>
+    <string name="operit_terminal_update_description">Versi baharu HermesTerminal ditemui, disyorkan untuk dikemas kini bagi mendapatkan fungsi dan keserasian yang lebih baik.</string>
     <string name="operit_terminal_release_notes">Nota kemas kini: %1$s</string>
-    <string name="operit_terminal_update_button">Kemas kini OperitTerminal</string>
-    <string name="operit_terminal_latest_description">Tahniah! Anda telah memasang versi terkini OperitTerminal, anda boleh mula menggunakan fungsi terminal yang berkuasa.</string>
-    <string name="operit_terminal_open_button">Buka OperitTerminal</string>
+    <string name="operit_terminal_update_button">Kemas kini HermesTerminal</string>
+    <string name="operit_terminal_latest_description">Tahniah! Anda telah memasang versi terkini HermesTerminal, anda boleh mula menggunakan fungsi terminal yang berkuasa.</string>
+    <string name="operit_terminal_open_button">Buka HermesTerminal</string>
     <string name="functional_model_config_title">Tetapan Konfigurasi Model Fungsian</string>
     <string name="functional_model_config_desc">Tetapkan konfigurasi model berasingan untuk fungsi yang berbeza, membolehkan setiap fungsi menggunakan tetapan API yang paling sesuai.</string>
     <string name="manage_all_model_configs">Urus semua konfigurasi model</string>
@@ -4018,7 +4018,7 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="mcp_issue_body_install_step3">3. Masukkan alamat repositori: `%1$s`</string>
     <string name="mcp_issue_body_install_step4">4. Tetapkan nama plugin dan klik import</string>
     <string name="mcp_issue_body_title_tech_info">## Maklumat Teknikal</string>
-    <string name="mcp_issue_body_tech_platform">- **Platform Terbitan:** Pasaran Operit MCP</string>
+    <string name="mcp_issue_body_tech_platform">- **Platform Terbitan:** Pasaran Hermes MCP</string>
     <string name="mcp_issue_body_tech_publish_time">- **Masa Terbitan:** %1$s</string>
     <string name="mcp_issue_body_footer_note">*Isu ini dijana secara automatik oleh Hermes*</string>
     <string name="mcp_publish_body_section_plugin_info">## 📋 Maklumat Plugin</string>
@@ -4039,7 +4039,7 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="mcp_publish_body_section_tech_info">## 🛠️ Maklumat Teknikal</string>
     <string name="mcp_publish_body_table_header">| Item | Nilai |</string>
     <string name="mcp_publish_body_table_separator">|------|-----|</string>
-    <string name="mcp_publish_body_table_row_platform">| Platform Terbitan | Pasaran Operit MCP |</string>
+    <string name="mcp_publish_body_table_row_platform">| Platform Terbitan | Pasaran Hermes MCP |</string>
     <string name="mcp_publish_body_table_row_parser_version">| Versi Pengecaman | 1.0 |</string>
     <string name="mcp_publish_body_table_row_publish_time">| Masa Terbitan | %1$s |</string>
     <string name="mcp_plugin_detail_title">Butiran Plugin</string>
@@ -4871,7 +4871,7 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="logcat_cannot_open_output_stream">Tidak dapat membuka aliran output</string>
     <string name="logcat_mediestore_save_failed">MediaStore gagal menyimpan: %1$s</string>
     <string name="logcat_cannot_create_download_dir">Tidak dapat mencipta direktori muat turun</string>
-    <string name="logcat_cannot_create_operit_dir">Tidak dapat mencipta direktori operit</string>
+    <string name="logcat_cannot_create_operit_dir">Tidak dapat mencipta direktori Hermes</string>
     <string name="logcat_file_create_failed">Penciptaan fail gagal atau kosong</string>
     <string name="logcat_filesystem_save_failed">Sistem fail gagal menyimpan: %1$s</string>
     <string name="backup_export_failed_create_file">Eksport gagal: Tidak dapat mencipta fail</string>
@@ -5647,7 +5647,7 @@ Kini anda boleh menggunakan mod AutoGLM di antara muka perbualan.</string>
     <string name="demo_cmd_list_activities">Lihat Aktiviti yang aktif</string>
     <string name="demo_cmd_list_services">Senaraikan perkhidmatan sistem</string>
     <string name="demo_cmd_check_resolution">Semak resolusi skrin</string>
-    <string name="demo_cmd_echo_hello">Cetak Hello OperitTerminal</string>
+    <string name="demo_cmd_echo_hello">Cetak Hello HermesTerminal</string>
     <string name="demo_cmd_list_files">Senaraikan fail dan direktori</string>
     <string name="demo_cmd_show_user">Paparkan pengguna semasa</string>
     <string name="demo_cmd_update_package_manager">Kemas kini pengurus pakej (Ubuntu)</string>

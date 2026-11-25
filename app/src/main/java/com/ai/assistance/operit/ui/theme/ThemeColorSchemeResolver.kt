@@ -16,13 +16,38 @@ import com.ai.assistance.operit.data.preferences.UserPreferencesManager.Companio
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager.Companion.ON_COLOR_MODE_LIGHT
 
 private val ResolvedDarkColorScheme =
-    darkColorScheme(primary = Purple80, secondary = PurpleGrey80, tertiary = Pink80)
+    darkColorScheme(
+        primary = Purple80,
+        onPrimary = Color.White,
+        secondary = PurpleGrey80,
+        onSecondary = Color(0xFF0F0E13),
+        tertiary = Pink80,
+        onTertiary = Color(0xFF0F0E13),
+        background = Color(0xFF0F0E13),
+        onBackground = Color(0xFFF4F2F8),
+        surface = Color(0xFF0F0E13),
+        onSurface = Color(0xFFF4F2F8),
+        surfaceVariant = Color(alpha = 0.06f, red = 1f, green = 1f, blue = 1f),
+        onSurfaceVariant = Color(0xFF9CA3AF),
+        surfaceContainerLowest = Color(0xFF141318),
+        surfaceContainerLow = Color(0xFF19181C),
+        surfaceContainer = Color(0xFF1D1C21),
+        surfaceContainerHigh = Color(0xFF222126),
+        surfaceContainerHighest = Color(0xFF27262B),
+    )
 
 private val ResolvedLightColorScheme =
     lightColorScheme(
         primary = Purple40,
+        onPrimary = Color.White,
         secondary = PurpleGrey40,
-        tertiary = Pink40
+        onSecondary = Color(0xFF0F0E13),
+        tertiary = Pink40,
+        onTertiary = Color.White,
+        background = Color(0xFFF4F2F8),
+        onBackground = Color(0xFF0F0E13),
+        surface = Color(0xFFF4F2F8),
+        onSurface = Color(0xFF0F0E13),
     )
 
 fun resolveThemeColorScheme(
@@ -39,17 +64,12 @@ fun resolveThemeColorScheme(
             snapshot.themeMode == UserPreferencesManager.THEME_MODE_DARK
         }
 
+    // Hermes 品牌色固定：禁用壁纸动态取色，确保官方设计令牌生效
     var colorScheme =
-        when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-                if (darkTheme) {
-                    dynamicDarkColorScheme(context)
-                } else {
-                    dynamicLightColorScheme(context)
-                }
-
-            darkTheme -> ResolvedDarkColorScheme
-            else -> ResolvedLightColorScheme
+        if (darkTheme) {
+            ResolvedDarkColorScheme
+        } else {
+            ResolvedLightColorScheme
         }
 
     if (snapshot.useCustomColors) {

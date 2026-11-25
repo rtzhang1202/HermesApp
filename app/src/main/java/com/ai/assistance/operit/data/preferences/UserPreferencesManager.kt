@@ -379,12 +379,12 @@ class UserPreferencesManager private constructor(private val context: Context) {
     // 主题相关Flow
     val themeMode: Flow<String> =
             context.userPreferencesDataStore.data.map { preferences ->
-                preferences[THEME_MODE] ?: THEME_MODE_LIGHT
+                preferences[THEME_MODE] ?: THEME_MODE_DARK
             }
 
     val useSystemTheme: Flow<Boolean> =
             context.userPreferencesDataStore.data.map { preferences ->
-                preferences[USE_SYSTEM_THEME] ?: true
+                preferences[USE_SYSTEM_THEME] ?: false
             }
 
     val customPrimaryColor: Flow<Int?> =
@@ -2028,8 +2028,8 @@ class UserPreferencesManager private constructor(private val context: Context) {
         return ThemePreferenceSnapshot(
             source = source,
             sourceId = sourceId,
-            themeMode = stringValue(THEME_MODE, THEME_MODE_LIGHT) ?: THEME_MODE_LIGHT,
-            useSystemTheme = booleanValue(USE_SYSTEM_THEME, true),
+            themeMode = stringValue(THEME_MODE, THEME_MODE_DARK) ?: THEME_MODE_DARK,
+            useSystemTheme = booleanValue(USE_SYSTEM_THEME, false),
             useCustomColors = booleanValue(USE_CUSTOM_COLORS, false),
             customPrimaryColor = intValue(CUSTOM_PRIMARY_COLOR),
             customSecondaryColor = intValue(CUSTOM_SECONDARY_COLOR),
