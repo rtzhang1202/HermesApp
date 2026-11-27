@@ -169,6 +169,8 @@ class VoiceAssistantController private constructor(private val appContext: Conte
                 !text.isNullOrBlank() -> {
                     _pendingPrefill.value = text
                     _phase.value = VoicePhase.FOLLOWUP
+                    // 预填文本必须切到文字输入态，否则输入框还是麦克风界面，用户看不到预填内容
+                    _inputMode.value = InputMode.TEXT
                 }
                 _micPermissionGranted.value -> startVoiceInput()
                 else -> {

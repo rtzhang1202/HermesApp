@@ -92,13 +92,29 @@ class ScreenLensController private constructor(private val appContext: Context) 
     private var lastCrop: Bitmap? = null
     private var firstDrawLogged = false
 
+    /** 可选态（悬浮窗已出现、手势可接管）之前用户就点/画了：先记账，等快照到手再执行 */
+    private var pendingTap: Pair<Int, Int>? = null
+    private var pendingDrag: List<androidx.compose.ui.geometry.Offset>? = null
+    private var pendingFull = false
+
     val isShowing: Boolean
         get() = host != null
 
     // ===================== 显示 / 关闭 =====================
 
     fun show(tapT0: Long) {
-        if (host != null) return
+        // 无障碍服务重连时系统会销毁它名下的悬浮窗，但单例里还留着 host 引用；
+        // 不校验就会持续静默 no-op（症状：点识屏按钮只关语音界面、不弹识屏层）。
+        val current = host
+        if (current != null) {
+            if (current.isAttached()) {
+                AppLogger.d(TAG, "show ignored: overlay already attached")
+                return
+            }
+            AppLogger.w(TAG, "stale overlay host detected (window gone), rebuilding")
+            runCatching { current.detach() }
+            host = null
+        }
         val svc = ScreenSnapshotter.service()
         if (svc == null) {
             Toast.makeText(appContext, R.string.lens_no_accessibility, Toast.LENGTH_LONG).show()
@@ -108,6 +124,9 @@ class ScreenLensController private constructor(private val appContext: Context) 
         val newState = ScreenLensState()
         state = newState
         firstDrawLogged = false
+        pendingTap = null
+        pendingDrag = null
+        pendingFull = false
         val overlay = OverlayHost(svc)
         host = overlay
         try {
@@ -143,7 +162,10 @@ class ScreenLensController private constructor(private val appContext: Context) 
                     AppLogger.d(TAG, "firstFrame sinceTap=${elapsed(tapT0)}ms")
                 }
             }
-            AppLogger.d(TAG, "overlay attached sinceTap=${elapsed(tapT0)}ms")
+            AppLogger.d(
+                    TAG,
+                    "selectMode sinceTap=${elapsed(tapT0)}ms (gestures accepted, no analysis waited)"
+            )
             startCapture(tapT0)
         } catch (t: Throwable) {
             AppLogger.e(TAG, "attach overlay failed: ${t.message}", t)
@@ -156,6 +178,9 @@ class ScreenLensController private constructor(private val appContext: Context) 
         analyzeJob?.cancel()
         captureJob = null
         analyzeJob = null
+        pendingTap = null
+        pendingDrag = null
+        pendingFull = false
         host?.detach()
         host = null
         state = null
@@ -190,7 +215,19 @@ class ScreenLensController private constructor(private val appContext: Context) 
                         AppLogger.w(TAG, "no target window snapshot")
                         return@launch
                     }
-                    val shot = ScreenSnapshotter.takeScreenshot()
+                    // 目标窗口刚出现时，系统还在跑「返回应用」的缩放/滑入过渡；
+                    // 立即截屏会拍到黑边/裁切中间态（真机实测）。等过渡沉降再冻结。
+                    delay(280)
+                    // 截屏前把悬浮层藏起来：否则冻结帧会把提示条/按钮/暗化一起烤进截图，
+                    // 之后再叠加实时 UI 就出现双重文字（实测「Result」与「Reading the screen…」重叠）。
+                    host?.setHidden(true)
+                    delay(60)
+                    val shot =
+                            try {
+                                ScreenSnapshotter.takeScreenshot()
+                            } finally {
+                                host?.setHidden(false)
+                            }
                     val bitmap = shot.getOrNull()
                     if (state !== st) {
                         bitmap?.recycle()
@@ -206,14 +243,39 @@ class ScreenLensController private constructor(private val appContext: Context) 
                                 )
                         AppLogger.w(TAG, "capture failed: ${shot.exceptionOrNull()?.message}")
                     }
-                    st.phase = LensPhase.SELECT
+                    st.phase = if (st.phase == LensPhase.CAPTURING) LensPhase.SELECT else st.phase
                     AppLogger.d(
                             TAG,
                             "selectReady sinceTap=${elapsed(tapT0)}ms capture=${st.captureMs}ms " +
                                     "bitmap=${bitmap?.width}x${bitmap?.height} " +
                                     "nodes=${snapshot.nodes.size} pkg=${snapshot.packageName}"
                     )
+                    applyPendingSelection()
                 }
+    }
+
+    /** 快照就绪前用户已经点/画/选了全屏：此时补执行（早于识别、但绝不丢手势） */
+    private fun applyPendingSelection() {
+        val tap = pendingTap
+        val drag = pendingDrag
+        val full = pendingFull
+        pendingTap = null
+        pendingDrag = null
+        pendingFull = false
+        when {
+            tap != null -> {
+                AppLogger.d(TAG, "deferred tap applied ($tap)")
+                onTapAt(tap.first.toFloat(), tap.second.toFloat())
+            }
+            drag != null -> {
+                AppLogger.d(TAG, "deferred drag applied points=${drag.size}")
+                onDragSelected(drag)
+            }
+            full -> {
+                AppLogger.d(TAG, "deferred full-screen applied")
+                selectFullScreen()
+            }
+        }
     }
 
     /** 轮询直到出现「不属于本包的应用窗口」且能读出节点（语音界面 finish 需要几十~几百毫秒） */
@@ -224,7 +286,7 @@ class ScreenLensController private constructor(private val appContext: Context) 
             val snap = withContext(Dispatchers.IO) {
                 ScreenSnapshotter.captureTopAppWindow(appContext.packageName)
             }
-            if (snap != null && snap.nodes.isNotEmpty()) {
+            if (snap != null && snap.packageName.isNotBlank()) {
                 AppLogger.d(
                         TAG,
                         "target window ready sinceTap=${elapsed(tapT0)}ms pkg=${snap.packageName} " +
@@ -246,11 +308,17 @@ class ScreenLensController private constructor(private val appContext: Context) 
 
     private fun onTapAt(x: Float, y: Float) {
         val st = state ?: return
-        if (st.phase != LensPhase.SELECT) return
+        if (st.phase != LensPhase.SELECT && st.phase != LensPhase.CAPTURING) return
         val snapshot = st.snapshot
         val px = x.toInt()
         val py = y.toInt()
-        val node = snapshot?.let { ScreenSnapshotter.hitTest(it.nodes, px, py) }
+        if (snapshot == null) {
+            pendingTap = px to py
+            st.trail = emptyList()
+            AppLogger.d(TAG, "tap ($px,$py) deferred: snapshot not ready")
+            return
+        }
+        val node = ScreenSnapshotter.hitTest(snapshot.nodes, px, py)
         val bounds = node?.let { Rect(it.bounds) } ?: Rect(px - 24, py - 24, px + 24, py + 24)
         AppLogger.d(
                 TAG,
@@ -263,7 +331,12 @@ class ScreenLensController private constructor(private val appContext: Context) 
 
     private fun onDragSelected(points: List<androidx.compose.ui.geometry.Offset>) {
         val st = state ?: return
-        if (st.phase != LensPhase.SELECT) return
+        if (st.phase != LensPhase.SELECT && st.phase != LensPhase.CAPTURING) return
+        if (st.snapshot == null && st.bitmap == null) {
+            pendingDrag = points
+            AppLogger.d(TAG, "drag deferred: snapshot not ready points=${points.size}")
+            return
+        }
         val rect = clamp(normalizeSelectionRect(points, 1f, 1f))
         AppLogger.d(TAG, "lasso bounds=$rect points=${points.size}")
         analyzeSelection(LensSelection(LensSelectionKind.PATH, rect))
@@ -272,9 +345,15 @@ class ScreenLensController private constructor(private val appContext: Context) 
     private fun selectFullScreen() {
         val st = state ?: return
         val bmp = st.bitmap
+        val snap = st.snapshot
+        if (bmp == null && snap == null) {
+            pendingFull = true
+            AppLogger.d(TAG, "full screen deferred: snapshot not ready")
+            return
+        }
         val rect =
                 if (bmp != null) Rect(0, 0, bmp.width, bmp.height)
-                else st.snapshot?.let { Rect(0, 0, it.displayWidth, it.displayHeight) }
+                else snap?.let { Rect(0, 0, it.displayWidth, it.displayHeight) }
                         ?: Rect(0, 0, 1080, 2400)
         AppLogger.d(TAG, "full screen selected bounds=$rect")
         analyzeSelection(LensSelection(LensSelectionKind.FULL, rect))
@@ -390,7 +469,9 @@ class ScreenLensController private constructor(private val appContext: Context) 
                                 (raw.height * scale).toInt().coerceAtLeast(1),
                                 true
                         )
-                if (scaled !== raw) raw.recycle()
+                // 整屏选区时 createBitmap(source, 0,0,w,h) 返回的就是 source 本身，
+                // 不能回收（否则 Compose 正在绘制的冻结帧被 recycle → Canvas crash）
+                if (scaled !== raw && raw !== source) raw.recycle()
                 scaled
             }
         } catch (t: Throwable) {
@@ -496,10 +577,12 @@ class ScreenLensController private constructor(private val appContext: Context) 
 
     private fun continueInVoice() {
         val text = currentText().trim()
-        val context =
+        val raw =
                 appContext.getString(R.string.lens_ask_prefix) +
                         (if (text.length > 500) text.take(500) + "…" else text) +
                         appContext.getString(R.string.lens_ask_suffix)
+        // 预填框只有 3 行：把换行压成空格，保证「请帮我：」这段尾巴也能看见
+        val context = raw.replace('\n', ' ').replace(Regex(" {2,}"), " ").trim()
         val intent =
                 Intent(appContext, VoiceAssistantActivity::class.java).apply {
                     action = VoiceAssistantActivity.ACTION_OPEN_VOICE_ASSISTANT
@@ -617,6 +700,14 @@ class ScreenLensController private constructor(private val appContext: Context) 
             }
             owner?.destroy()
             owner = null
+        }
+
+        /** 视窗是否还挂在 WindowManager 上（服务重连会把它摘掉） */
+        fun isAttached(): Boolean = view?.isAttachedToWindow == true
+
+        /** 截屏瞬间隐藏悬浮层（不参与合成），避免把自己画进冻结帧 */
+        fun setHidden(hidden: Boolean) {
+            view?.visibility = if (hidden) android.view.View.INVISIBLE else android.view.View.VISIBLE
         }
     }
 

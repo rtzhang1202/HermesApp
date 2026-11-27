@@ -107,15 +107,15 @@ fun ScreenLensScreen(
         onOpenAccessibilitySettings: () -> Unit
 ) {
     val phase = state.phase
-    // 采集期只铺 10% 暗化（会一起进截图，幅度可忽略）；拿到冻结帧后铺不透明底 + 12% 蒙版
-    Box(
-            modifier =
-                    Modifier.fillMaxSize()
-                            .background(
-                                    if (phase == LensPhase.CAPTURING) Color(0x1A000000)
-                                    else Color.Black
-                            )
-    ) {
+    // 采集期只铺 10% 暗化（会一起进截图，幅度可忽略）；拿到冻结帧后铺不透明底 + 12% 蒙版；
+    // 拦截/失败态没有截图，保留 80% 暗化让底下的应用仍可辨认（而不是一块全黑）。
+    val rootBg =
+            when {
+                phase == LensPhase.CAPTURING -> Color(0x1A000000)
+                state.bitmap == null -> Color(0xCC000000)
+                else -> Color.Black
+            }
+    Box(modifier = Modifier.fillMaxSize().background(rootBg)) {
         // 1) 冻结帧（截图）。截屏包含识屏层 10% 暗化蒙版，整体略暗但文字可读。
         state.bitmap?.let { bmp ->
             Image(
@@ -127,8 +127,11 @@ fun ScreenLensScreen(
             Box(modifier = Modifier.fillMaxSize().background(Color(0x1F000000)))
         }
 
-        // 2) 选择层（画轨迹 + 选区框 + 节点框）
-        if (phase == LensPhase.SELECT || phase == LensPhase.ANALYZING || phase == LensPhase.RESULT) {
+        // 2) 选择层（画轨迹 + 选区框 + 节点框）：采集期即可画，不等截图/识别
+        if (phase == LensPhase.CAPTURING ||
+                        phase == LensPhase.SELECT ||
+                        phase == LensPhase.ANALYZING ||
+                        phase == LensPhase.RESULT) {
             SelectionCanvas(
                     state = state,
                     onTap = onTap,
@@ -137,12 +140,23 @@ fun ScreenLensScreen(
             )
         }
 
-        // 3) 顶部提示条（悬浮窗拿不到 Activity 的 inset 分发，补固定顶部留白避开状态栏）
+        // 3) 顶部提示条（悬浮窗拿不到 Activity 的 inset 分发：读系统 status_bar_height 资源固定留白）
+        val statusBarHeightDp =
+                with(androidx.compose.ui.platform.LocalDensity.current) {
+                    val res = androidx.compose.ui.platform.LocalContext.current.resources
+                    val id = res.getIdentifier("status_bar_height", "dimen", "android")
+                    val px = if (id > 0) res.getDimensionPixelSize(id) else (24 * density).toInt()
+                    (px / density).dp
+                }
         Row(
                 modifier =
                         Modifier.fillMaxWidth()
-                                .statusBarsPadding()
-                                .padding(start = 12.dp, end = 12.dp, top = 30.dp, bottom = 8.dp),
+                                .padding(
+                                        start = 12.dp,
+                                        end = 12.dp,
+                                        top = statusBarHeightDp + 8.dp,
+                                        bottom = 8.dp
+                                ),
                 verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -175,8 +189,8 @@ fun ScreenLensScreen(
             )
         }
 
-        // 4) 底部按钮条（可选区且无结果面板时）
-        if (phase == LensPhase.SELECT) {
+        // 4) 底部按钮条（可选区/采集期即出现；结果面板时让位）
+        if (phase == LensPhase.SELECT || phase == LensPhase.CAPTURING) {
             Row(
                     modifier =
                             Modifier.align(Alignment.BottomCenter)
@@ -231,7 +245,10 @@ fun ScreenLensScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                            text = stringResource(R.string.lens_blocked_title),
+                            text = stringResource(
+                                    if (phase == LensPhase.BLOCKED) R.string.lens_blocked_title
+                                    else R.string.lens_title
+                            ),
                             color = LensTextPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold
@@ -285,7 +302,10 @@ private fun SelectionCanvas(
     Canvas(
             modifier =
                     Modifier.fillMaxSize().pointerInput(state.phase, bitmap) {
-                        if (state.phase != LensPhase.SELECT) return@pointerInput
+                        if (state.phase != LensPhase.SELECT &&
+                                        state.phase != LensPhase.CAPTURING
+                        )
+                                return@pointerInput
                         // 画布坐标 → 显示像素（截图坐标系）：节点 bounds / 裁剪都用显示像素
                         val scaleX =
                                 if (bitmap != null && bitmap.width > 0)
@@ -333,14 +353,16 @@ private fun SelectionCanvas(
         val sx = if (bitmap != null && bitmap.width > 0) size.width / bitmap.width else 1f
         val sy = if (bitmap != null && bitmap.height > 0) size.height / bitmap.height else 1f
 
-        // 已选中的节点/选区框
+        // 已选中的节点/选区框（全屏选区不铺满紫色蒙层，只留边框）
         state.selection?.let { sel ->
             val r = sel.bounds
-            drawRect(
-                    color = LensAccent.copy(alpha = 0.22f),
-                    topLeft = Offset(r.left * sx, r.top * sy),
-                    size = Size(r.width() * sx, r.height() * sy)
-            )
+            if (sel.kind != LensSelectionKind.FULL) {
+                drawRect(
+                        color = LensAccent.copy(alpha = 0.22f),
+                        topLeft = Offset(r.left * sx, r.top * sy),
+                        size = Size(r.width() * sx, r.height() * sy)
+                )
+            }
             drawRect(
                     color = LensAccentLight,
                     topLeft = Offset(r.left * sx, r.top * sy),
@@ -405,7 +427,7 @@ private fun ResultSheet(
                         Modifier.fillMaxSize()
                                 .navigationBarsPadding()
                                 .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 18.dp, vertical = 12.dp)
+                                .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 22.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(

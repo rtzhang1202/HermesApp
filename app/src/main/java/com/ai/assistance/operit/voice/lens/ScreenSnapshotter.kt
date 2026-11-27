@@ -98,8 +98,20 @@ object ScreenSnapshotter {
                         }
         val root = picked.second
         val pkg = root.packageName?.toString().orEmpty()
-        val nodes = flatten(root)
         val (dw, dh) = displaySize(svc)
+        // 敏感页面：包名一旦命中，连节点树都不读（不 flatten、不截屏），只回包名让上层拦截。
+        val blocked = SensitiveScreenGuard.blockReason(pkg)
+        if (blocked != null) {
+            AppLogger.w(TAG, "sensitive package blocked before tree read pkg=$pkg reason=$blocked")
+            return ScreenSnapshot(
+                    packageName = pkg,
+                    pageTitle = "",
+                    displayWidth = dw,
+                    displayHeight = dh,
+                    nodes = emptyList()
+            )
+        }
+        val nodes = flatten(root)
         val title = guessTitle(nodes, dh)
         AppLogger.d(
                 TAG,
