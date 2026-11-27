@@ -99,6 +99,9 @@ class ScreenLensController private constructor(private val appContext: Context) 
     private var lastCrop: Bitmap? = null
     private var firstDrawLogged = false
 
+    /** 拖动中的缩略图重算去抖：文字每帧都重提（便宜），位图不必每帧都裁 */
+    private var attachDebounce: Runnable? = null
+
     /** 提问层（Activity）是否已在运行；运行期间 beginAsk 不再重复拉 Activity */
     private var askSurfaceAlive = false
     private var askSurfaceClose: (() -> Unit)? = null
@@ -179,6 +182,8 @@ class ScreenLensController private constructor(private val appContext: Context) 
         captureJob?.cancel()
         analyzeJob?.cancel()
         askOpenGuard?.cancel()
+        attachDebounce?.let { mainHandler.removeCallbacks(it) }
+        attachDebounce = null
         captureJob = null
         analyzeJob = null
         askOpenGuard = null
@@ -267,6 +272,29 @@ class ScreenLensController private constructor(private val appContext: Context) 
                         return@launch
                     }
                     st.bitmap = bitmap
+                    if (bitmap != null) {
+                        // 新冻结帧：帧号 +1，旧附件（文字/缩略图）一律作废，等选区落定后重算
+                        st.frameSeq += 1
+                        st.attach = null
+                        // 冻结帧落地后再读一次节点树。轮询阶段那次读到的可能是「返回应用」转场
+                        // 中的布局，bounds 与 280ms 后的截图错位 —— 实测就是附件文字 textLen=0
+                        // （框在『网络和互联网』上却提取不到字）的主因。宁可多读一次 30~60ms。
+                        val aligned =
+                                withContext(Dispatchers.IO) {
+                                    ScreenSnapshotter.captureTopAppWindow(appContext.packageName)
+                                }
+                        if (aligned != null &&
+                                        aligned.nodes.isNotEmpty() &&
+                                        aligned.packageName == snapshot.packageName
+                        ) {
+                            st.snapshot = aligned
+                            AppLogger.d(
+                                    TAG,
+                                    "node tree re-read after frame: nodes=${aligned.nodes.size} " +
+                                            "(was ${snapshot.nodes.size}) pkg=${aligned.packageName}"
+                            )
+                        }
+                    }
                     st.captureMs = SystemClock.uptimeMillis() - t0
                     if (bitmap == null) {
                         st.analyzeError =
@@ -280,8 +308,8 @@ class ScreenLensController private constructor(private val appContext: Context) 
                     AppLogger.d(
                             TAG,
                             "selectReady sinceTap=${elapsed(tapT0)}ms capture=${st.captureMs}ms " +
-                                    "bitmap=${bitmap?.width}x${bitmap?.height} " +
-                                    "nodes=${snapshot.nodes.size} pkg=${snapshot.packageName}"
+                                    "bitmap=${bitmap?.width}x${bitmap?.height} frameSeq=${st.frameSeq} " +
+                                    "nodes=${st.snapshot?.nodes?.size ?: -1} pkg=${snapshot.packageName}"
                     )
                     applyPendingSelection()
                 }
@@ -420,7 +448,8 @@ class ScreenLensController private constructor(private val appContext: Context) 
         st.result = null
         st.analyzeError = null
         st.asrDetail = null
-        refreshAttachments()
+        // 进入提问步：立刻按当前选框算一份附件（文字 + 缩略图），chip 与后续识别同源
+        refreshAttachments("ask-open")
         AppLogger.d(
                 TAG,
                 "ask opened kind=${sel.kind} bounds=${sel.bounds} surfaceAlive=$askSurfaceAlive " +
@@ -480,8 +509,11 @@ class ScreenLensController private constructor(private val appContext: Context) 
 
     private fun resetSelection() {
         val st = state ?: return
+        attachDebounce?.let { mainHandler.removeCallbacks(it) }
+        attachDebounce = null
         st.phase = LensPhase.SELECT
         st.selection = null
+        st.attach = null
         st.result = null
         st.trail = emptyList()
         st.analyzing = false
@@ -498,6 +530,7 @@ class ScreenLensController private constructor(private val appContext: Context) 
         st.phase = LensPhase.SELECT
         st.result = null
         st.selection = null
+        st.attach = null
         st.trail = emptyList()
         st.analyzing = false
     }
@@ -522,21 +555,51 @@ class ScreenLensController private constructor(private val appContext: Context) 
     // ===================== 选框修正 =====================
 
     private fun onRectEditStart(grab: RectGrab, before: Rect) {
-        AppLogger.d(TAG, "rectEdit begin grab=$grab before=$before")
+        attachDebounce?.let { mainHandler.removeCallbacks(it) }
+        attachDebounce = null
+        val att = state?.attach
+        AppLogger.d(
+                TAG,
+                "rectEdit begin grab=$grab before=$before " +
+                        "chipBounds=${att?.bounds} chipTextLen=${att?.textLen ?: -1} frame=${att?.frameId ?: "none"}"
+        )
     }
 
+    /**
+     * 拖动/改尺寸中：选框先跟着走，附件**文字立刻按新 bounds 重提**（节点树过滤很便宜），
+     * 缩略图去抖 120ms 再裁 —— 目的就是让 chip 永远不可能停在旧那一行。
+     */
     private fun onRectEdited(rect: Rect) {
         val st = state ?: return
         val sel = st.selection ?: return
-        st.selection = LensSelection(sel.kind, clamp(rect), sel.node)
+        val newRect = clamp(rect)
+        if (newRect == sel.bounds) return
+        st.selection = LensSelection(sel.kind, newRect, sel.node)
+        // 文字即时刷新（quiet：拖动期间不刷日志），缩略图去抖
+        refreshAttachments("rect-edit-live", withThumb = false, quiet = true)
+        attachDebounce?.let { mainHandler.removeCallbacks(it) }
+        val job =
+                Runnable {
+                    attachDebounce = null
+                    val cur = state ?: return@Runnable
+                    if (cur.phase == LensPhase.ASK) refreshAttachments("rect-edit-live")
+                }
+        attachDebounce = job
+        mainHandler.postDelayed(job, 120L)
     }
 
+    /**
+     * 松开手 = 一次编辑结束：**整份附件重算**（文字 + 缩略图）并留成对日志，
+     * 与上面的 `rectEdit begin/end` 一起可复核「框动到哪里、chip 就换到哪里」。
+     */
     private fun onRectEditEnd(grab: RectGrab, before: Rect, after: Rect) {
+        attachDebounce?.let { mainHandler.removeCallbacks(it) }
+        attachDebounce = null
         val st = state ?: return
         val sel = st.selection ?: return
         val finalRect = clamp(after)
         st.selection = LensSelection(sel.kind, finalRect, sel.node)
-        refreshAttachments()
+        refreshAttachments("rect-edit-end")
         AppLogger.d(
                 TAG,
                 "rectEdit end grab=$grab before=$before after=$finalRect " +
@@ -544,19 +607,76 @@ class ScreenLensController private constructor(private val appContext: Context) 
         )
     }
 
-    /** 附件条数据：选中截图缩略图 + 文字摘要（改框后重算） */
-    private fun refreshAttachments() {
-        val st = state ?: return
-        val sel = st.selection ?: return
-        val text = st.snapshot?.textIn(sel.bounds).orEmpty()
-        st.selectionText = text
-        st.thumb = st.bitmap?.let { thumbOf(it, sel.bounds) }
+    /**
+     * 附件快照重算：文字（节点树按 bounds 提取）+ 缩略图（冻结帧按同一 bounds 重裁），
+     * 整份替换 [ScreenLensState.attach] —— chip 与送识别的裁剪/文字都只读它。
+     *
+     * textLen=0 时 text 是空串，UI 显示「未识别到文字」占位；**绝不复用上一次的文字**。
+     * [withThumb]=false 只重提文字（拖动中逐帧调用），旧缩略图先留着，稍后去抖补裁。
+     */
+    private fun refreshAttachments(reason: String, withThumb: Boolean = true, quiet: Boolean = false) {
+        val st = state ?: run {
+            AppLogger.w(TAG, "attachments skipped reason=$reason: no state")
+            return
+        }
+        val sel = st.selection ?: run {
+            AppLogger.w(TAG, "attachments skipped reason=$reason: no selection")
+            return
+        }
+        val bounds = Rect(sel.bounds)
+        val prev = st.attach
+        val frame = st.bitmap
+        val text = st.snapshot?.textIn(bounds).orEmpty()
+        val thumb =
+                if (withThumb) frame?.let { thumbOf(it, bounds) }
+                else if (prev != null && prev.frame === frame) prev.thumb else frame?.let { thumbOf(it, bounds) }
+        val snap =
+                LensAttachSnapshot(
+                        bounds = bounds,
+                        frameSeq = st.frameSeq,
+                        frame = frame,
+                        text = text,
+                        thumb = thumb,
+                        reason = reason
+                )
+        st.attach = snap
+        if (quiet) return
+        val snapNodes = st.snapshot?.nodes
         AppLogger.d(
                 TAG,
-                "attachments bounds=${sel.bounds} textLen=${text.length} " +
-                        "thumb=${st.thumb?.let { "${it.width}x${it.height}" } ?: "none"} " +
-                        "image=${st.attachImage} text=${st.attachText}"
+                "attachments reason=$reason bounds=$bounds textLen=${snap.textLen} " +
+                        "thumb=${thumb?.let { "${it.width}x${it.height}" } ?: "none"} " +
+                        "frame=${snap.frameId} image=${st.attachImage} text=${st.attachText} " +
+                        "nodes=${snapNodes?.size ?: -1} labeled=${snapNodes?.count { it.hasLabel } ?: -1} " +
+                        "inBox=${snapNodes?.let { ScreenSnapshot.filterIn(it, bounds) }?.size ?: -1} " +
+                        "preview=" +
+                        text.replace('\n', ' ').take(28).ifBlank { "<empty→未识别到文字>" }
         )
+    }
+
+    /**
+     * 取「当前选框」的附件快照（提交识别前调用）。
+     * 快照缺失、或 bounds / 冻结帧已经变了，就先按同一帧重算一份 ——
+     * 这样『理解』送出去的文字与裁剪图，必然就是附件条上展示的那一份。
+     */
+    private fun ensureAttachments(reason: String): LensAttachSnapshot? {
+        val st = state ?: return null
+        val sel = st.selection ?: return null
+        val cur = st.attach
+        if (cur != null &&
+                        cur.bounds == sel.bounds &&
+                        cur.frame === st.bitmap &&
+                        cur.frameSeq == st.frameSeq
+        ) {
+            return cur
+        }
+        AppLogger.d(
+                TAG,
+                "attachments rebuild reason=$reason " +
+                        "why=${if (cur == null) "missing" else if (cur.bounds != sel.bounds) "bounds ${cur.bounds}→${sel.bounds}" else "frame changed"}"
+        )
+        refreshAttachments(reason)
+        return st.attach
     }
 
     private fun thumbOf(source: Bitmap, bounds: Rect, maxSide: Int = 256): Bitmap? {
@@ -733,21 +853,33 @@ class ScreenLensController private constructor(private val appContext: Context) 
     ) {
         val st = state ?: return
         analyzeJob?.cancel()
-        st.selection = selection
+        attachDebounce?.let { mainHandler.removeCallbacks(it) }
+        attachDebounce = null
+        st.selection = LensSelection(selection.kind, Rect(selection.bounds), selection.node)
         st.phase = LensPhase.ANALYZING
         st.analyzing = true
         st.result = null
         st.analyzeError = null
         st.lastQuestion = question
         st.asrDetail = null
-        val snapshot = st.snapshot
-        val localText = snapshot?.textIn(selection.bounds).orEmpty()
+        // 同源同帧：附件条展示的那一份快照（文字 + 从同一冻结帧裁的图）就是送模型的唯一输入。
+        // 若选框刚被改过而快照还没跟上，ensureAttachments 会先按同一帧重算 —— 于是
+        // 「chip 写的是哪一行」=「模型看到的是哪一行」，不会再出现回答与选区不符。
+        val attach = ensureAttachments("submit")
+        val rect = attach?.bounds ?: Rect(selection.bounds)
+        st.selection = LensSelection(selection.kind, Rect(rect), selection.node)
+        val localText = if (includeText) attach?.text.orEmpty() else ""
         st.localText = localText
-        val crop = if (includeImage) st.bitmap?.let { cropForModel(it, selection.bounds) } else null
+        val crop =
+                if (includeImage) attach?.let { a -> a.frame?.let { cropForModel(it, a.bounds) } }
+                else null
         lastCrop = crop
         AppLogger.d(
                 TAG,
-                "analyze start bounds=${selection.bounds} localTextLen=${localText.length} " +
+                "analyze start bounds=$rect localTextLen=${localText.length} " +
+                        "attachReason=${attach?.reason ?: "none"} frame=${attach?.frameId ?: "none"} " +
+                        "chipTextLen=${attach?.textLen ?: -1} " +
+                        "thumb=${attach?.thumb?.let { "${it.width}x${it.height}" } ?: "none"} " +
                         "crop=${crop?.width}x${crop?.height} question=${question ?: "<default>"} " +
                         "attachImage=$includeImage attachText=$includeText " +
                         "followUp=${previousAnswer != null}"
@@ -758,10 +890,11 @@ class ScreenLensController private constructor(private val appContext: Context) 
                             ScreenLensAnalyzer.analyze(
                                     context = appContext,
                                     crop = crop,
-                                    snapshot = snapshot,
-                                    selection = selection.bounds,
+                                    snapshot = st.snapshot,
+                                    selection = rect,
                                     question = question,
-                                    localText = localText,
+                                    // 用附件快照里的文字（同一份），不让分析层自己再提取一遍
+                                    localText = if (includeText) localText else null,
                                     includeText = includeText,
                                     previousAnswer = previousAnswer
                             )
@@ -856,7 +989,7 @@ class ScreenLensController private constructor(private val appContext: Context) 
         val title =
                 appContext.getString(R.string.lens_memory_title_prefix) +
                         (scene.ifBlank { text.take(18) })
-        val thumbPath = saveThumbnail(lastCrop ?: st.thumb)
+        val thumbPath = saveThumbnail(lastCrop ?: st.attach?.thumb)
         val pkg = st.snapshot?.packageName
         val sensitivity = sensitivityOf(text)
         scope.launch {

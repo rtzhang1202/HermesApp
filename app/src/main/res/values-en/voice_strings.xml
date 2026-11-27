@@ -96,6 +96,7 @@
     <string name="lens_asked_prefix">Your question: </string>
     <string name="lens_attach_image">Screenshot</string>
     <string name="lens_attach_text">Selected text</string>
+    <string name="lens_attach_text_empty">No text recognized</string>
     <string name="lens_attach_remove">Remove attachment</string>
     <string name="lens_attach_none">No attachments (answer from your question only)</string>
     <string name="lens_ask_voice">Voice input</string>

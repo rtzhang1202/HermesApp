@@ -118,6 +118,16 @@ object ScreenSnapshotter {
                 "snapshot pkg=$pkg title=$title nodes=${nodes.size} display=${dw}x$dh " +
                         "windowActive=${picked.first?.isActive}"
         )
+        // 节点树自查：文字节点数量 + 前几个带文字节点（改框后附件文字为空时，靠它判断
+        // 是「选区里确实没文字」还是「节点树没读到」——两者对外表现一样，排查必须区分）
+        val labeled = nodes.filter { it.hasLabel }
+        AppLogger.d(
+                TAG,
+                "labels=${labeled.size} sample=" +
+                        labeled.take(10).joinToString(" | ") {
+                            "${it.label.replace('\n', ' ').take(14)}@${it.bounds.top}-${it.bounds.bottom}"
+                        }
+        )
         return ScreenSnapshot(
                 packageName = pkg,
                 pageTitle = title,

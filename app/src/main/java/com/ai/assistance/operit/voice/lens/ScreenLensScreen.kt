@@ -124,11 +124,15 @@ class ScreenLensState {
     /** 输入框只放用户自己的话：ASR 回填按光标插入/替换选段，绝不整段清空 */
     var askField by mutableStateOf(TextFieldValue(""))
 
-    /** 附件：选中区域的文字摘要（以 chip 形式贴在输入框上方） */
-    var selectionText by mutableStateOf("")
+    /** 冻结帧序号：每次截屏 +1（附件快照带帧号，日志可证 chip 与模型图同帧） */
+    var frameSeq by mutableStateOf(0)
 
-    /** 附件：选中区域缩略图 */
-    var thumb by mutableStateOf<Bitmap?>(null)
+    /**
+     * 附件快照（chip 文字 + chip 缩略图 + 送模型裁剪的唯一来源）。
+     * 选框每变一次就整份重算一次：文字按新 bounds 从节点树重提，缩略图按新框从同一冻结帧重裁。
+     * 旧实现把文字/缩略图拆成两个字段各自更新，漏一次就永久脱节（回答与选区不符的根因）。
+     */
+    var attach by mutableStateOf<LensAttachSnapshot?>(null)
 
     /** 附件开关（× 删除后不再随本次识别上传） */
     var attachImage by mutableStateOf(true)
@@ -760,14 +764,19 @@ private fun AskPanel(
     }
 }
 
-/** 附件条：缩略图 chip + 文字摘要 chip，都可点 × 删除（删除即不再随本次识别上传） */
+/** 附件条：缩略图 chip + 文字摘要 chip，都可点 × 删除（删除即不再随本次识别上传）。
+ *
+ *  两个 chip 都只读 [ScreenLensState.attach] —— 与送识别的文字/裁剪图是同一份快照，
+ *  所以「chip 写的是哪一行，模型看到的就是哪一行」。
+ *  选区里没有文字时显示「未识别到文字」占位（绝不保留上一次的旧文字）。 */
 @Composable
 private fun AttachmentBar(
         state: ScreenLensState,
         onRemoveImage: () -> Unit,
         onRemoveText: () -> Unit
 ) {
-    val summary = state.selectionText.replace('\n', ' ').replace(Regex(" {2,}"), " ").trim()
+    val attach = state.attach
+    val summary = attach?.text.orEmpty().replace('\n', ' ').replace(Regex(" {2,}"), " ").trim()
     val summaryText = if (summary.length > 16) summary.take(16) + "…" else summary
     Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -782,7 +791,7 @@ private fun AttachmentBar(
                                     .padding(start = 4.dp, end = 2.dp, top = 3.dp, bottom = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
             ) {
-                val thumb = state.thumb
+                val thumb = attach?.thumb
                 if (thumb != null) {
                     Image(
                             bitmap = thumb.asImageBitmap(),
@@ -851,8 +860,11 @@ private fun AttachmentBar(
                 )
                 Spacer(Modifier.width(5.dp))
                 Text(
-                        text = summaryText.ifBlank { stringResource(R.string.lens_attach_text) },
-                        color = LensTextPrimary,
+                        text =
+                                summaryText.ifBlank {
+                                    stringResource(R.string.lens_attach_text_empty)
+                                },
+                        color = if (summaryText.isBlank()) LensTextSecondary else LensTextPrimary,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

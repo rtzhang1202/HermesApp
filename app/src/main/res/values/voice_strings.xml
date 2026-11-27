@@ -96,6 +96,7 @@
     <string name="lens_asked_prefix">你的问题：</string>
     <string name="lens_attach_image">选中截图</string>
     <string name="lens_attach_text">选中文字</string>
+    <string name="lens_attach_text_empty">未识别到文字</string>
     <string name="lens_attach_remove">移除附件</string>
     <string name="lens_attach_none">无附件（仅按你的问题作答）</string>
     <string name="lens_ask_voice">语音输入</string>
