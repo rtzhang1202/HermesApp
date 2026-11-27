@@ -241,7 +241,8 @@ fun OperitApp(
                 NavItem.HermesSettings,
                 NavItem.AssistantConfig,
                 NavItem.Packages,
-                NavItem.MemoryBase
+                NavItem.MemoryBase,
+                NavItem.UserMemory
             )
         ),
         NavGroup(

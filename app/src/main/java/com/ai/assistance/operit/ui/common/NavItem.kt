@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Api
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
@@ -56,6 +57,8 @@ sealed class NavItem(val route: String, val titleResId: Int, val icon: ImageVect
         object Packages : NavItem("packages", R.string.nav_packages, Icons.Default.Extension)
         object MemoryBase :
                 NavItem("memory_base", R.string.nav_memory_base, Icons.Default.History)
+        object UserMemory :
+                NavItem("user_memory", R.string.user_memory_nav_title, Icons.Default.Bookmark)
         object Terminal : NavItem("terminal", R.string.terminal, Icons.Default.Terminal)
         object Toolbox : NavItem("toolbox", R.string.toolbox, Icons.Default.Apps)
         object About : NavItem("about", R.string.nav_about, Icons.Default.Info)

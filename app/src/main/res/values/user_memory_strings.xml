@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 用户记忆数据库（独立记忆库）文案；单独成文件，避免与 strings.xml 的并行改动冲突 -->
+<resources>
+    <string name="user_memory_nav_title">用户记忆</string>
+    <string name="user_memory_screen_title">用户记忆</string>
+    <string name="user_memory_search_hint">搜索记忆（如：我妈的身份证、车停哪了）</string>
+    <string name="user_memory_tab_all">全部</string>
+    <string name="user_memory_tab_pending">待确认</string>
+    <string name="user_memory_type_id_card">证照</string>
+    <string name="user_memory_type_address">地址</string>
+    <string name="user_memory_type_preference">偏好</string>
+    <string name="user_memory_type_schedule">日程</string>
+    <string name="user_memory_type_account">账号</string>
+    <string name="user_memory_type_object_location">物品位置</string>
+    <string name="user_memory_type_relation">关系</string>
+    <string name="user_memory_type_event">事件</string>
+    <string name="user_memory_type_other">其他</string>
+    <string name="user_memory_status_confirmed">已确认</string>
+    <string name="user_memory_status_pending">待确认</string>
+    <string name="user_memory_status_conflict">冲突</string>
+    <string name="user_memory_empty">还没有记忆。对助手说「记一下：…」，或点右下角「+」手动新增。</string>
+    <string name="user_memory_add">新增记忆</string>
+    <string name="user_memory_edit">编辑</string>
+    <string name="user_memory_delete">删除</string>
+    <string name="user_memory_save">保存到记忆</string>
+    <string name="user_memory_cancel">取消</string>
+    <string name="user_memory_close">关闭</string>
+    <string name="user_memory_discard">放弃</string>
+    <string name="user_memory_field_title">标题</string>
+    <string name="user_memory_field_value">内容</string>
+    <string name="user_memory_field_type">类型</string>
+    <string name="user_memory_field_sensitivity">敏感级别</string>
+    <string name="user_memory_sensitivity_normal">普通</string>
+    <string name="user_memory_sensitivity_sensitive">敏感</string>
+    <string name="user_memory_sensitivity_secret">机密（不注入对话）</string>
+    <string name="user_memory_source_label">来源</string>
+    <string name="user_memory_source_manual">手动</string>
+    <string name="user_memory_source_screen">屏幕识别</string>
+    <string name="user_memory_source_chat">对话</string>
+    <string name="user_memory_source_import">导入</string>
+    <string name="user_memory_source_system">系统</string>
+    <string name="user_memory_detail_title">记忆详情</string>
+    <string name="user_memory_confirm_card_title">要记住这条吗？</string>
+    <string name="user_memory_confirm_card_sub">确认后写入你的记忆库（confidence=1，已确认），可随时在「用户记忆」里修改或删除</string>
+    <string name="user_memory_saved_toast">已保存到用户记忆</string>
+    <string name="user_memory_discarded_toast">已放弃这条记忆</string>
+    <string name="user_memory_deleted_toast">已删除</string>
+    <string name="user_memory_delete_confirm_title">删除这条记忆？</string>
+    <string name="user_memory_delete_confirm_text">删除后无法恢复（审计记录会保留操作痕迹）。</string>
+    <string name="user_memory_pending_banner">有 %1$d 条记忆待确认</string>
+    <string name="user_memory_conflict_hint">与另一条记忆冲突，请在详情里选择保留哪条</string>
+    <string name="user_memory_audit_title">操作记录</string>
+    <string name="user_memory_keep_this">采用这条</string>
+    <string name="user_memory_reveal">显示完整内容</string>
+    <string name="user_memory_hide">隐藏</string>
+    <string name="user_memory_value_required">标题和内容不能为空</string>
+
+    <style name="user_memory_confirm_theme" parent="Theme.Operit">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+</resources>

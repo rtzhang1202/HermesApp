@@ -15,6 +15,14 @@ object SystemPromptConfig {
     private const val BEHAVIOR_GUIDELINES_CORE_EN = """
 BEHAVIOR GUIDELINES:
 - Tool Scheduling: All tools may be called either in parallel or sequentially. Choose whichever best fits the task. The tool system will decide and handle execution conflicts automatically.
+- Tool routing rules (mandatory):
+  * Alarm clock / wake-up ("wake me at 6:30") → `alarm` (clock app only).
+  * Reminder / appointment / meeting / schedule / class / deadline ("remind me at 3pm tomorrow") → `calendar` with action=create. A calendar event IS the reminder — never set an alarm for a reminder.
+  * Contacts (lookup / add / delete) → `contacts`.
+  * Recent photos or videos, or a real file path of a picture → `gallery` (do not guess paths).
+  * Copy / move / rename / find files → `file_manager`.
+  * Brightness, media volume, ring volume, do-not-disturb, Bluetooth, Wi-Fi → `settings`.
+  * Anything else device-specific (battery, notifications, app list, ...) → `list_device_tools` first, then `use_package`.
 - Keep responses concise and clear. Avoid lengthy explanations unless requested.
 - Don't repeat previous conversation steps. Maintain context naturally.
 - Acknowledge your limitations honestly. If you don't know something, say so.
@@ -32,6 +40,14 @@ BEHAVIOR GUIDELINES:
     private const val BEHAVIOR_GUIDELINES_CORE_CN = """
 行为准则：
 - 工具调度：所有工具都可以并行或串行调用。根据任务需要选择即可，工具系统会自行决定并处理执行冲突问题。
+- 工具分工（必须遵守）：
+  * 闹钟 / 叫醒 / 起床（"定个明早6点半的闹钟"）→ `alarm`（只动时钟 App）。
+  * 提醒 / 日程 / 会议 / 约会 / 上课 / 截止时间（"明天下午3点提醒我开会"）→ `calendar` 的 action=create。日历事件本身就是提醒，绝对不要用闹钟代替提醒。
+  * 联系人查询 / 新增 / 删除 → `contacts`。
+  * 最近照片视频、图片真实路径 → `gallery`（不要猜路径）。
+  * 复制 / 移动 / 重命名 / 按名找文件 → `file_manager`。
+  * 亮度 / 媒体音量 / 铃声音量 / 勿扰 / 蓝牙 / WiFi → `settings`。
+  * 其他设备能力（电量、通知、应用列表等）→ 先用 `list_device_tools` 搜，再 `use_package`。
 - 回答应简洁明了，除非用户要求，否则避免冗长的解释。
 - 不要重复之前的对话步骤，自然地保持上下文。
 - 坦诚承认自己的局限性，如果不知道某事，就直接说明。
@@ -108,6 +124,30 @@ Based on user needs, proactively select the most appropriate tool or combination
     private fun getBehaviorGuidelines(useEnglish: Boolean, disableStatusTags: Boolean): String {
         if (disableStatusTags) return ""
         return if (useEnglish) BEHAVIOR_GUIDELINES_EN else BEHAVIOR_GUIDELINES_CN
+    }
+
+    /**
+     * 当前设备时间区块：日历/闹钟工具需要绝对时间，模型自身不知道"今天几号"，
+     * 不注入就会出现"明天下午3点"被算成 1970/随机日期。
+     */
+    private fun buildCurrentTimeSection(useEnglish: Boolean): String {
+        val now = System.currentTimeMillis()
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss EEEE", java.util.Locale.getDefault())
+        val local = fmt.format(java.util.Date(now))
+        val tz = java.util.TimeZone.getDefault().id
+        return if (useEnglish) {
+            """
+CURRENT DEVICE TIME:
+- Now: $local ($tz); epoch millis: $now.
+- Use it to turn "tomorrow 3pm" / "in 20 minutes" into absolute times for `calendar` (start_time epoch millis) and `alarm` (hour/minute).
+            """.trimIndent()
+        } else {
+            """
+当前设备时间：
+- 现在：$local（$tz）；epoch 毫秒：$now。
+- 把"明天下午3点""20分钟后"换算成绝对时间时以此为准：`calendar` 用 start_time（epoch 毫秒），`alarm` 用 hour/minute。
+            """.trimIndent()
+        }
     }
 
     private fun getToolUsageGuidelines(useEnglish: Boolean, disableStatusTags: Boolean): String {
@@ -254,6 +294,8 @@ PACKAGE SYSTEM
 """
 BEGIN_SELF_INTRODUCTION_SECTION
 
+CURRENT_TIME_SECTION
+
 THINKING_GUIDANCE_SECTION
 
 $BEHAVIOR_GUIDELINES_EN
@@ -289,6 +331,8 @@ THINKING PROCESS GUIDELINES:
     val SYSTEM_PROMPT_TEMPLATE_CN =
 """
 BEGIN_SELF_INTRODUCTION_SECTION
+
+CURRENT_TIME_SECTION
 
 THINKING_GUIDANCE_SECTION
 
@@ -529,6 +573,15 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                 prompt.replace("THINKING_GUIDANCE_SECTION", thinkingGuidancePromptToUse)
             } else {
                 prompt.replace("THINKING_GUIDANCE_SECTION", "")
+            }
+
+    // Inject the current device time (calendar/alarm need absolute time anchors)
+    val currentTimeSection = buildCurrentTimeSection(useEnglish)
+    prompt =
+            if (prompt.contains("CURRENT_TIME_SECTION")) {
+                prompt.replace("CURRENT_TIME_SECTION", currentTimeSection)
+            } else {
+                prompt + "\n\n" + currentTimeSection
             }
 
     // Determine the available tools string based on memory query setting and image recognition

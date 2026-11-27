@@ -434,11 +434,22 @@ class ConversationService(
                     finalSystemPrompt,
                     aiName
                 )
+                // 用户记忆数据库召回：与本次提问相关的高置信条目注入 <user_memory>（secret 级不注入）
+                val userMemoryBlock =
+                        runCatching {
+                                    UserMemoryPromptInjector.buildBlock(
+                                            context,
+                                            processedInput,
+                                            useEnglish
+                                    )
+                                }
+                                .getOrDefault("")
+
                 preparedHistory.add(
                     0,
                     PromptTurn(
                         kind = PromptTurnKind.SYSTEM,
-                        content = finalSystemPromptWithReplacements
+                        content = finalSystemPromptWithReplacements + userMemoryBlock
                     )
                 )
             }

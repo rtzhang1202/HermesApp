@@ -27,9 +27,28 @@
     <string name="voice_asr_unavailable">Speech recognition unavailable, switched to text input</string>
     <string name="voice_permission_needed">Microphone permission not granted, please type instead</string>
 
+    <!-- Cloud ASR status/error strings (voice/asr adapter layer) -->
+    <string name="voice_status_recognizing">Recognizing…</string>
+    <string name="voice_status_recognizing_cloud">Recognizing in the cloud…</string>
+    <string name="voice_status_recognizing_local">Offline recognizing…</string>
+    <string name="voice_hint_recognizing">Converting your speech to text…</string>
+    <string name="voice_asr_config_missing">Cloud ASR config not found (MiMo API key); configure it in Settings first</string>
+    <string name="voice_asr_network_failed">Network unavailable, cloud recognition failed</string>
+    <string name="voice_asr_network_fallback">Network unavailable, switched to offline recognition — please speak again</string>
+    <string name="voice_asr_empty_audio">No speech detected — try again or type instead</string>
+    <string name="voice_asr_timeout">Recognition timed out — try again or type instead</string>
+    <string name="voice_asr_no_mic">Microphone unavailable — check permission and retry</string>
+    <string name="voice_asr_server_error">Cloud recognition service rejected the request</string>
+    <string name="voice_asr_local_unavailable">Offline recognition unavailable (local model missing)</string>
+
     <string name="voice_handed_off_detail">Handed off to background; result will be filled back into this session</string>
     <string name="voice_subagent_result_prefix">[Background task result]</string>
     <string name="voice_error_prefix">Error: </string>
+    <string name="voice_answer_empty">I didn\'t quite catch that — try again?</string>
+
+    <!-- Single-shot result-state actions (defect 1) -->
+    <string name="voice_action_speak_again">Speak again</string>
+    <string name="voice_action_close">Close</string>
 
     <string name="voice_session_title">Voice assistant session</string>
 

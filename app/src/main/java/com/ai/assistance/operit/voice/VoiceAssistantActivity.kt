@@ -19,8 +19,9 @@ import com.ai.assistance.operit.util.AppLogger
  *   am start -a com.ai.assistance.operit.action.OPEN_VOICE_ASSISTANT \
  *       --es text "你好" --ez auto_send true
  *
- * 唤起后默认进入聆听态（本地 ASR）；模型资产缺失/无麦克风时自动降级为
- * 键盘文本兜底输入。会话走专用短记忆 session（voice:session）。
+ * 唤起后默认进入聆听态（云端 MiMo ASR 优先，网络类失败降级本地 sherpa 离线识别）；
+ * 配置缺失/无麦克风/识别失败时自动降级为键盘文本兜底输入（顶部显示具体原因）。
+ * 会话走专用短记忆 session（voice:session）。
  */
 class VoiceAssistantActivity : ComponentActivity() {
 

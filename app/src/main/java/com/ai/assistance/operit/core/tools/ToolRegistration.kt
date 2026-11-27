@@ -523,6 +523,25 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             }
     )
 
+    // 注册用户记忆数据库工具（独立记忆库，和上面的 query_memory 知识库无关）
+    handler.registerTool(
+            name = "memory_save",
+            descriptionGenerator = { tool ->
+                val title = tool.parameters.find { it.name == "title" }?.value ?: ""
+                "Save to user memory (pending confirmation): $title"
+            },
+            executor = { tool -> ToolGetter.getUserMemoryToolExecutor(context).invoke(tool) }
+    )
+
+    handler.registerTool(
+            name = "memory_search",
+            descriptionGenerator = { tool ->
+                val query = tool.parameters.find { it.name == "query" }?.value ?: ""
+                "Search user memory: $query"
+            },
+            executor = { tool -> ToolGetter.getUserMemoryToolExecutor(context).invoke(tool) }
+    )
+
     // 注册用户偏好更新工具
     handler.registerTool(
             name = "update_user_preferences",
@@ -2021,27 +2040,85 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             }
     )
 
-    // 闹钟控制（设置/查看/关闭）
+    // 闹钟控制（设置/查看/关闭）——只负责"闹钟/叫醒"，提醒/日程一律走 calendar
     handler.registerTool(
             name = "alarm",
             descriptionGenerator = { tool ->
                 val action = tool.parameters.find { it.name == "action" }?.value ?: "set"
-                "Control device alarms (current action=$action: set a new alarm, show the alarm list, or dismiss)"
+                "Clock-app WAKE-UP ALARM only (current action=$action: set a wake-up alarm, show the alarm list, or dismiss). " +
+                    "Never use this for reminders/appointments/meetings — create a calendar event instead."
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) { systemOperationTools.controlAlarm(tool) }
             }
     )
 
-    // 日历控制（查询/创建/删除）
+    // 日历控制（查询/创建/删除）——提醒/日程/会议/约会/待办时间点全部落这里
     handler.registerTool(
             name = "calendar",
             descriptionGenerator = { tool ->
                 val action = tool.parameters.find { it.name == "action" }?.value ?: "query"
-                "Control calendar events (current action=$action: query upcoming events, create an event, or delete)"
+                "Calendar events — THE tool for every reminder, appointment, meeting, class and deadline " +
+                    "(current action=$action: query upcoming events, create an event, or delete)"
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) { systemOperationTools.controlCalendar(tool) }
+            }
+    )
+
+    // 系统能力工具：通讯录 / 相册 / 文件管理 / 设备设置（独立实现，见 StandardDeviceCapabilityTools）
+    val deviceCapabilityTools = ToolGetter.getDeviceCapabilityTools(context)
+
+    handler.registerTool(
+            name = "contacts",
+            descriptionGenerator = { tool ->
+                val action = tool.parameters.find { it.name == "action" }?.value ?: "query"
+                "Device contacts (current action=$action: query by name/number, add a contact, delete a contact)"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { deviceCapabilityTools.contacts(tool) }
+            }
+    )
+
+    handler.registerTool(
+            name = "gallery",
+            descriptionGenerator = { tool ->
+                val limit = tool.parameters.find { it.name == "limit" }?.value ?: "20"
+                val days = tool.parameters.find { it.name == "days" }?.value ?: "7"
+                "List recent photos/videos from MediaStore (limit=$limit, days=$days); returns absolute path, date, size and content URI"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { deviceCapabilityTools.gallery(tool) }
+            }
+    )
+
+    handler.registerTool(
+            name = "file_manager",
+            descriptionGenerator = { tool ->
+                val action = tool.parameters.find { it.name == "action" }?.value ?: "search"
+                when (action.lowercase(java.util.Locale.ROOT)) {
+                    "copy", "cp" ->
+                        "Copy a file or directory (source -> destination, recursive, overwrite flag)"
+                    "move", "mv", "rename" ->
+                        "Move or rename a file or directory (source -> destination, overwrite flag)"
+                    else ->
+                        "Search files by name pattern under a directory (path, pattern, limit, max_depth)"
+                }
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { deviceCapabilityTools.fileManager(tool) }
+            }
+    )
+
+    handler.registerTool(
+            name = "settings",
+            descriptionGenerator = { tool ->
+                val action = tool.parameters.find { it.name == "action" }?.value ?: "get"
+                val key = tool.parameters.find { it.name == "key" }?.value ?: "?"
+                "Read/write device settings (current action=$action key=$key): brightness, media_volume, ring_volume, dnd, bluetooth, wifi"
+            },
+            executor = { tool ->
+                runBlocking(Dispatchers.IO) { deviceCapabilityTools.settings(tool) }
             }
     )
 

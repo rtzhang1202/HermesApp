@@ -180,4 +180,22 @@ object ToolGetter {
     fun getSoftwareSettingsModifyTools(context: Context): StandardSoftwareSettingsModifyTools {
         return StandardSoftwareSettingsModifyTools(context)
     }
+
+    /**
+     * 获取系统能力工具（通讯录/相册/文件管理/设备设置）
+     * @param context 应用上下文
+     * @return 系统能力工具实现（标准版本）
+     */
+    fun getDeviceCapabilityTools(context: Context): StandardDeviceCapabilityTools {
+        return StandardDeviceCapabilityTools(context)
+    }
+
+    /**
+     * 获取用户记忆数据库工具（memory_save / memory_search）
+     * @param context 应用上下文
+     * @return 用户记忆工具实现（标准版本）
+     */
+    fun getUserMemoryToolExecutor(context: Context): UserMemoryToolExecutor {
+        return UserMemoryToolExecutor(context)
+    }
 }

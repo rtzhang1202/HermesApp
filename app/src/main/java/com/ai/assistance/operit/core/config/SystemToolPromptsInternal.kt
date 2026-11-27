@@ -2593,7 +2593,7 @@ object SystemToolPromptsInternal {
                         ),
                         ToolPrompt(
                             name = "alarm",
-                            description = "Control device alarms: set a new alarm, show the alarm list, or dismiss an alarm.",
+                            description = "WAKE-UP ALARM in the clock app only ('wake me at 6:30'). Never for reminders, appointments, meetings or schedules — those use the calendar tool.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -2638,7 +2638,7 @@ object SystemToolPromptsInternal {
                         ),
                         ToolPrompt(
                             name = "calendar",
-                            description = "Control calendar events: query upcoming events, create an event, or delete an event.",
+                            description = "Calendar events — THE tool for every reminder, appointment, meeting and deadline (\"remind me to ... at 3pm\"). Create an event; never use the alarm tool for reminders.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -2690,6 +2690,55 @@ object SystemToolPromptsInternal {
                                         description = "required for action=delete",
                                         required = false
                                     )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "contacts",
+                            description = "Device address book: query contacts by name or number, add a contact (name + phone), delete a contact by name or contact_id.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "query / add / delete", required = true),
+                                    ToolParameterSchema(name = "name", type = "string", description = "name to search for (query/delete) or the new contact name (add)", required = false),
+                                    ToolParameterSchema(name = "phone", type = "string", description = "phone number for action=add", required = false),
+                                    ToolParameterSchema(name = "contact_id", type = "integer", description = "optional for action=delete", required = false),
+                                    ToolParameterSchema(name = "limit", type = "integer", description = "optional, max results for query, default 20", required = false, default = "20")
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "gallery",
+                            description = "List recent photos/videos from the gallery (MediaStore): absolute path, added date, size and content URI.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "list_recent (default)", required = false, default = "list_recent"),
+                                    ToolParameterSchema(name = "limit", type = "integer", description = "max items, default 20", required = false, default = "20"),
+                                    ToolParameterSchema(name = "days", type = "integer", description = "look back N days, default 7; 0 = all time", required = false, default = "7"),
+                                    ToolParameterSchema(name = "media_type", type = "string", description = "images (default) / videos / all", required = false, default = "images")
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "file_manager",
+                            description = "Copy, move/rename, or search files and directories by name pattern.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "copy / move / search", required = true),
+                                    ToolParameterSchema(name = "source", type = "string", description = "source path for copy/move", required = false),
+                                    ToolParameterSchema(name = "destination", type = "string", description = "destination path for copy/move", required = false),
+                                    ToolParameterSchema(name = "overwrite", type = "boolean", description = "optional, replace existing destination, default false", required = false, default = "false"),
+                                    ToolParameterSchema(name = "path", type = "string", description = "search root, default /sdcard", required = false, default = "/sdcard"),
+                                    ToolParameterSchema(name = "pattern", type = "string", description = "file name glob or substring", required = false),
+                                    ToolParameterSchema(name = "limit", type = "integer", description = "max results, default 50", required = false, default = "50"),
+                                    ToolParameterSchema(name = "max_depth", type = "integer", description = "max recursion depth, default 6", required = false, default = "6")
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "settings",
+                            description = "Read or change device settings: brightness, media volume, ring volume, do-not-disturb, bluetooth, wifi. Unsupported toggles report the real failure instead of pretending.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "get / set", required = true),
+                                    ToolParameterSchema(name = "key", type = "string", description = "brightness / media_volume / ring_volume / dnd / bluetooth / wifi", required = true),
+                                    ToolParameterSchema(name = "value", type = "string", description = "value for action=set", required = false),
+                                    ToolParameterSchema(name = "unit", type = "string", description = "optional, percent or index", required = false)
                                 )
                         ),
                         ToolPrompt(
@@ -2801,6 +2850,92 @@ object SystemToolPromptsInternal {
                                     )
                                 ),
                             notes = "Workflow: start → perform actions on device → stop (waits for AI summarization) → save(skill_name=...). Or use create(skill_name=..., content=...) to directly create a skill without recording. After saving/creating, the skill becomes available via use_package."
+                        )
+                    )
+            ),
+            SystemToolPromptCategory(
+                categoryName = "User Memory Tools",
+                tools =
+                    listOf(
+                        ToolPrompt(
+                            name = "memory_save",
+                            description = "Save a fact ABOUT THE USER into the user memory database (ID documents, address, preferences, accounts, object locations, relations, experiences). Creates a PENDING item and pops a confirmation card; never claim it is stored before the user taps Save. Knowledge-base notes belong to query_memory, not here.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "title",
+                                        type = "string",
+                                        description = "short human-readable title, e.g. car parking spot",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "value",
+                                        type = "string",
+                                        description = "the fact itself in the user's own words",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "type",
+                                        type = "string",
+                                        description = "id_card / bank_card / address / preference / schedule / account / object_location / relation / event / other",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "kind",
+                                        type = "string",
+                                        description = "fact (default) / episode / snippet",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "subject",
+                                        type = "string",
+                                        description = "entity this fact is about; same type+subject with a different value is kept as a conflict",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "sensitivity",
+                                        type = "integer",
+                                        description = "0 normal / 1 sensitive / 2 secret (never injected into conversations)",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "source_app",
+                                        type = "string",
+                                        description = "optional package name",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "source_uri",
+                                        type = "string",
+                                        description = "optional page URL / message id / screenshot id",
+                                        required = false
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "memory_search",
+                            description = "Search the USER MEMORY database (facts about the user personally: ID info, address, preferences, accounts, where the car is parked, family, experiences). NOT the knowledge base — use query_memory for notes and documents.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "query",
+                                        type = "string",
+                                        description = "natural-language keywords; * lists the most recent entries",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "type",
+                                        type = "string",
+                                        description = "optional type filter",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "limit",
+                                        type = "integer",
+                                        description = "max results, default 5",
+                                        required = false
+                                    )
+                                )
                         )
                     )
             )
@@ -5393,7 +5528,7 @@ object SystemToolPromptsInternal {
                         ),
                         ToolPrompt(
                             name = "alarm",
-                            description = "控制设备闹钟：设置新闹钟、打开闹钟列表或关闭闹钟。",
+                            description = "只在时钟 App 里设定「闹钟/叫醒」（如「定个明早6点半的闹钟」）。提醒、日程、会议、约会一律不用它，必须用 calendar 创建日历事件。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -5438,7 +5573,7 @@ object SystemToolPromptsInternal {
                         ),
                         ToolPrompt(
                             name = "calendar",
-                            description = "控制日历事件：查询近期日程、创建事件或删除事件。",
+                            description = "日历事件——所有「提醒、日程、会议、约会、截止时间」都用它创建（如「明天下午3点提醒我开会」）；不要用 alarm 代替提醒。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -5490,6 +5625,55 @@ object SystemToolPromptsInternal {
                                         description = "action=delete 必填（query 结果首列的 id）",
                                         required = false
                                     )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "contacts",
+                            description = "设备通讯录：按姓名或号码查询、新增联系人（姓名+电话）、按姓名或 contact_id 删除。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "query / add / delete", required = true),
+                                    ToolParameterSchema(name = "name", type = "string", description = "query/delete 的姓名关键词；add 时为姓名", required = false),
+                                    ToolParameterSchema(name = "phone", type = "string", description = "action=add 的电话号码", required = false),
+                                    ToolParameterSchema(name = "contact_id", type = "integer", description = "可选，action=delete 用", required = false),
+                                    ToolParameterSchema(name = "limit", type = "integer", description = "可选，query 返回条数，默认 20", required = false, default = "20")
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "gallery",
+                            description = "列出相册最近图片/视频（MediaStore）：绝对路径、入库日期、大小、content URI。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "list_recent（默认）", required = false, default = "list_recent"),
+                                    ToolParameterSchema(name = "limit", type = "integer", description = "最多条数，默认 20", required = false, default = "20"),
+                                    ToolParameterSchema(name = "days", type = "integer", description = "回溯天数，默认 7；0 不限", required = false, default = "7"),
+                                    ToolParameterSchema(name = "media_type", type = "string", description = "images（默认）/ videos / all", required = false, default = "images")
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "file_manager",
+                            description = "复制、移动/重命名、或按文件名模式搜索文件与目录。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "copy / move / search", required = true),
+                                    ToolParameterSchema(name = "source", type = "string", description = "copy/move 源路径", required = false),
+                                    ToolParameterSchema(name = "destination", type = "string", description = "copy/move 目标路径", required = false),
+                                    ToolParameterSchema(name = "overwrite", type = "boolean", description = "可选，覆盖已存在目标，默认 false", required = false, default = "false"),
+                                    ToolParameterSchema(name = "path", type = "string", description = "search 扫描目录，默认 /sdcard", required = false, default = "/sdcard"),
+                                    ToolParameterSchema(name = "pattern", type = "string", description = "文件名通配或子串", required = false),
+                                    ToolParameterSchema(name = "limit", type = "integer", description = "最多结果数，默认 50", required = false, default = "50"),
+                                    ToolParameterSchema(name = "max_depth", type = "integer", description = "最大递归深度，默认 6", required = false, default = "6")
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "settings",
+                            description = "读取或修改设备设置：亮度、媒体音量、铃声音量、勿扰、蓝牙、WiFi。系统不允许的项会如实报失败原因。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(name = "action", type = "string", description = "get / set", required = true),
+                                    ToolParameterSchema(name = "key", type = "string", description = "brightness / media_volume / ring_volume / dnd / bluetooth / wifi", required = true),
+                                    ToolParameterSchema(name = "value", type = "string", description = "action=set 的值", required = false),
+                                    ToolParameterSchema(name = "unit", type = "string", description = "可选，percent 或 index", required = false)
                                 )
                         ),
                         ToolPrompt(
@@ -5601,6 +5785,92 @@ object SystemToolPromptsInternal {
                                     )
                                 ),
                             notes = "工作流程：start → 在设备上执行操作 → stop（等待 AI 总结）→ save(skill_name=...)。或使用 create(skill_name=..., content=...) 直接创建技能无需录制。保存/创建后可通过 use_package 使用该技能。"
+                        )
+                    )
+            ),
+            SystemToolPromptCategory(
+                categoryName = "用户记忆工具",
+                tools =
+                    listOf(
+                        ToolPrompt(
+                            name = "memory_save",
+                            description = "把一条【关于用户本人】的事实存入用户记忆数据库（证件、地址、偏好、账号、物品位置、关系、经历）。只创建「待确认」条目并弹确认卡，用户点保存前不要声称已存好。知识库笔记请用 query_memory，不要放这里。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "title",
+                                        type = "string",
+                                        description = "简短标题，如「车停位置」",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "value",
+                                        type = "string",
+                                        description = "事实本身，用用户原话",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "type",
+                                        type = "string",
+                                        description = "id_card / bank_card / address / preference / schedule / account / object_location / relation / event / other",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "kind",
+                                        type = "string",
+                                        description = "fact（默认）/ episode / snippet",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "subject",
+                                        type = "string",
+                                        description = "事实主体；同 type+subject 但值不同会保留两条并标冲突",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "sensitivity",
+                                        type = "integer",
+                                        description = "0 普通 / 1 敏感 / 2 机密（永不注入对话）",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "source_app",
+                                        type = "string",
+                                        description = "可选，来源包名",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "source_uri",
+                                        type = "string",
+                                        description = "可选，页面 URL / 消息 id / 截图 id",
+                                        required = false
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "memory_search",
+                            description = "检索【用户记忆数据库】（关于用户本人的事实：证件、地址、偏好、账号、车停在哪、家人、经历）。不是知识库——笔记文档请用 query_memory。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "query",
+                                        type = "string",
+                                        description = "自然语言关键词；传 * 列出最近条目",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "type",
+                                        type = "string",
+                                        description = "可选，按类型过滤",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "limit",
+                                        type = "integer",
+                                        description = "最多返回条数，默认 5",
+                                        required = false
+                                    )
+                                )
                         )
                     )
             )

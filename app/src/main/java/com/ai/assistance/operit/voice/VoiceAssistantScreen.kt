@@ -109,17 +109,24 @@ fun VoiceAssistantScreen(
     LaunchedEffect(Unit) { enterProgress.animateTo(1f, tween(420)) }
 
     val listState = rememberLazyListState()
-    LaunchedEffect(bubbles.size, streamingText) {
+    val lastBubbleText = bubbles.lastOrNull()?.text
+    LaunchedEffect(bubbles.size, lastBubbleText, streamingText) {
         if (bubbles.isNotEmpty() || streamingText.isNotEmpty()) {
-            delay(50)
             val last = if (streamingText.isNotEmpty()) bubbles.size else bubbles.size - 1
-            if (last >= 0) listState.animateScrollToItem(last)
+            if (last >= 0) {
+                delay(60)
+                listState.animateScrollToItem(last)
+                // 图片是异步加载的：气泡挂上图片后还会再变高一次，补一次滚动保证整条气泡可见
+                delay(700)
+                listState.animateScrollToItem(last)
+            }
         }
     }
 
     val statusText = statusDetail ?: when (phase) {
         VoicePhase.AWAKE -> stringResource(R.string.voice_status_awake)
         VoicePhase.LISTENING -> stringResource(R.string.voice_status_listening)
+        VoicePhase.RECOGNIZING -> stringResource(R.string.voice_status_recognizing)
         VoicePhase.TRANSCRIBING -> stringResource(R.string.voice_status_transcribing)
         VoicePhase.THINKING -> stringResource(R.string.voice_status_thinking)
         VoicePhase.ANSWERING -> stringResource(R.string.voice_status_answering)
@@ -199,6 +206,8 @@ fun VoiceAssistantScreen(
             Text(
                 text = when (phase) {
                     VoicePhase.LISTENING -> stringResource(R.string.voice_hint_listening)
+                    VoicePhase.RECOGNIZING ->
+                        stringResource(R.string.voice_hint_recognizing)
                     VoicePhase.THINKING, VoicePhase.ANSWERING ->
                         stringResource(R.string.voice_hint_thinking)
                     VoicePhase.HANDED_OFF -> stringResource(R.string.voice_hint_handed_off)
@@ -231,6 +240,26 @@ fun VoiceAssistantScreen(
                     item(key = "streaming") {
                         VoiceBubbleRow(VoiceBubble(-1L, "ai", streamingText))
                     }
+                }
+            }
+
+            // ===== 结果态操作：单发模式下回答完成后给「再说一次 / 关闭」（缺陷1） =====
+            if (phase == VoicePhase.FOLLOWUP && (bubbles.isNotEmpty() || streamingText.isNotEmpty())) {
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ResultActionButton(
+                        label = stringResource(R.string.voice_action_speak_again),
+                        primary = true,
+                        modifier = Modifier.weight(1f)
+                    ) { controller.speakAgain() }
+                    ResultActionButton(
+                        label = stringResource(R.string.voice_action_close),
+                        primary = false,
+                        modifier = Modifier.weight(1f)
+                    ) { onClose() }
                 }
             }
 
@@ -371,9 +400,10 @@ private fun VoiceBubbleRow(bubble: VoiceBubble) {
                 )
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Text(
+            // 富内容气泡：文本照常排版，图片（link 标签 / 本地路径 / markdown）真实渲染
+            VoiceMessageContent(
                 text = bubble.text,
-                color = VoiceTextPrimary,
+                textColor = VoiceTextPrimary,
                 fontSize = if (isUser) 15.sp else 17.sp,
                 lineHeight = if (isUser) 21.sp else 25.sp
             )
@@ -391,6 +421,39 @@ private fun SuggestionChip(label: String, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Text(text = label, color = VoiceTextSecondary, fontSize = 13.sp, maxLines = 1)
+    }
+}
+
+/** 结果态操作按钮：「再说一次」（主色）/「关闭」（玻璃） */
+@Composable
+private fun ResultActionButton(
+    label: String,
+    primary: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .background(
+                if (primary) VoiceAccent else VoiceGlass,
+                RoundedCornerShape(22.dp)
+            )
+            .border(
+                1.dp,
+                if (primary) VoiceAccentLight else Color(0x1FFFFFFF),
+                RoundedCornerShape(22.dp)
+            )
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (primary) Color.White else VoiceTextSecondary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
     }
 }
 

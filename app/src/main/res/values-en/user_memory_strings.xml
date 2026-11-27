@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- User memory database strings (separate file to avoid conflicts with strings.xml) -->
+<resources>
+    <string name="user_memory_nav_title">User Memory</string>
+    <string name="user_memory_screen_title">User Memory</string>
+    <string name="user_memory_search_hint">Search memories (e.g. mom\'s ID card, where is my car)</string>
+    <string name="user_memory_tab_all">All</string>
+    <string name="user_memory_tab_pending">Pending</string>
+    <string name="user_memory_type_id_card">IDs</string>
+    <string name="user_memory_type_address">Address</string>
+    <string name="user_memory_type_preference">Preferences</string>
+    <string name="user_memory_type_schedule">Schedule</string>
+    <string name="user_memory_type_account">Accounts</string>
+    <string name="user_memory_type_object_location">Object location</string>
+    <string name="user_memory_type_relation">Relations</string>
+    <string name="user_memory_type_event">Events</string>
+    <string name="user_memory_type_other">Other</string>
+    <string name="user_memory_status_confirmed">Verified</string>
+    <string name="user_memory_status_pending">Pending</string>
+    <string name="user_memory_status_conflict">Conflict</string>
+    <string name="user_memory_empty">No memories yet. Say \"remember that ...\" to the assistant, or tap + to add one.</string>
+    <string name="user_memory_add">Add memory</string>
+    <string name="user_memory_edit">Edit</string>
+    <string name="user_memory_delete">Delete</string>
+    <string name="user_memory_save">Save to memory</string>
+    <string name="user_memory_cancel">Cancel</string>
+    <string name="user_memory_close">Close</string>
+    <string name="user_memory_discard">Discard</string>
+    <string name="user_memory_field_title">Title</string>
+    <string name="user_memory_field_value">Value</string>
+    <string name="user_memory_field_type">Type</string>
+    <string name="user_memory_field_sensitivity">Sensitivity</string>
+    <string name="user_memory_sensitivity_normal">Normal</string>
+    <string name="user_memory_sensitivity_sensitive">Sensitive</string>
+    <string name="user_memory_sensitivity_secret">Secret (never injected)</string>
+    <string name="user_memory_source_label">Source</string>
+    <string name="user_memory_source_manual">Manual</string>
+    <string name="user_memory_source_screen">Screen</string>
+    <string name="user_memory_source_chat">Chat</string>
+    <string name="user_memory_source_import">Import</string>
+    <string name="user_memory_source_system">System</string>
+    <string name="user_memory_detail_title">Memory detail</string>
+    <string name="user_memory_confirm_card_title">Remember this?</string>
+    <string name="user_memory_confirm_card_sub">Saving writes it into your memory database (confidence=1, verified). You can edit or delete it later in User Memory.</string>
+    <string name="user_memory_saved_toast">Saved to user memory</string>
+    <string name="user_memory_discarded_toast">Discarded</string>
+    <string name="user_memory_deleted_toast">Deleted</string>
+    <string name="user_memory_delete_confirm_title">Delete this memory?</string>
+    <string name="user_memory_delete_confirm_text">This cannot be undone (the audit trail is kept).</string>
+    <string name="user_memory_pending_banner">%1$d memory pending confirmation</string>
+    <string name="user_memory_conflict_hint">Conflicts with another memory — choose which one is right in the detail page</string>
+    <string name="user_memory_audit_title">Audit trail</string>
+    <string name="user_memory_keep_this">Keep this one</string>
+    <string name="user_memory_reveal">Show full value</string>
+    <string name="user_memory_hide">Hide</string>
+    <string name="user_memory_value_required">Title and value are required</string>
+</resources>

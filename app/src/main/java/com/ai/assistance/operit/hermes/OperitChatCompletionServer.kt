@@ -145,17 +145,79 @@ class OperitChatCompletionServer(
         val cleanedText: String
     )
 
+    /**
+     * 归一化工具参数名：mimo 等模型会输出 `<parameter=name="title">value`，
+     * 解析出的 key 变成 `name="title"`，参数就整个失效（工具报缺参、模型重试）。
+     * 这里把 `name="x"` / `name=x` / `"x"` 形态统一剥成 `x`。
+     */
+    private fun normalizeParamKey(raw: String): String {
+        var k = raw.trim()
+        if (k.isEmpty()) return k
+        val eqForm = Regex("""^name\s*=\s*["']?([A-Za-z0-9_\-]+)["']?$""").find(k)
+        if (eqForm != null) return eqForm.groupValues[1]
+        if (k.startsWith("name=")) k = k.removePrefix("name=")
+        return k.trim('"', '\'', ' ', '\n', '\r', '\t')
+    }
+
     internal fun extractToolCalls(text: String): ToolCallExtractResult {
+        // 主 pattern：tool / tool_xxx / tool_call（ChatMarkupRegex 既有）
         val matches = ChatMarkupRegex.toolCallPattern.findAll(text).toList()
-        if (matches.isNotEmpty()) {
-            val toolCalls = matches.map { match ->
+            .map { it to true }
+            .toMutableList()
+        // 兼容：function 标签包裹的工具调用（如 <function name="alarm">…</function>），
+        // 以及 tool_call 双写法——流式正文里两种标签名都会出现（缺陷3）
+        val altMatches = ALT_TOOL_CALL_PATTERN.findAll(text).toList()
+            .filter { alt ->
+                matches.none { m ->
+                    val r = m.first.range
+                    val a = alt.range
+                    r.first <= a.last && a.first <= r.last
+                }
+            }
+            .map { it to false }
+        matches += altMatches
+        // 兼容：<tool_call><tool name="x">…</function></tool_call> 双层包裹写法
+        // （mimo 真机实录：外层 tool_call 无 name，内层 tool 有 name，闭合标签写错成 </function>）
+        val wrappedMatches = WRAPPED_TOOL_CALL_PATTERN.findAll(text).toList()
+            .filter { w ->
+                matches.none { m ->
+                    val r = m.first.range
+                    val a = w.range
+                    r.first <= a.last && a.first <= r.last
+                }
+            }
+            .map { it to false }
+        matches += wrappedMatches
+        // 兼容：名字在标签里的写法（真机实录 <function=alarm>…</function>）
+        val eqMatches = ALT_TOOL_CALL_EQ_PATTERN.findAll(text).toList()
+            .filter { eq ->
+                matches.none { m ->
+                    val r = m.first.range
+                    val a = eq.range
+                    r.first <= a.last && a.first <= r.last
+                }
+            }
+            .map { it to false }
+        matches += eqMatches
+        val ordered = matches.sortedBy { it.first.range.first }
+
+        if (ordered.isNotEmpty()) {
+            val toolCalls = ordered.map { (match, _) ->
                 val toolName = match.groupValues[2]
                 val body = match.groupValues[3]
                 val paramsJson = JSONObject()
                 ChatMarkupRegex.toolParamPattern.findAll(body).forEach { paramMatch ->
-                    val key = paramMatch.groupValues[1]
+                    val key = normalizeParamKey(paramMatch.groupValues[1])
                     val value = unescapeXml(paramMatch.groupValues[2])
                     paramsJson.put(key, value)
+                }
+                // 参数名字在标签里的写法（真机实录 <parameter=action>set 形态）
+                ALT_PARAM_PATTERN.findAll(body).forEach { paramMatch ->
+                    val key = normalizeParamKey(paramMatch.groupValues[1])
+                    if (!paramsJson.has(key)) {
+                        val value = unescapeXml(paramMatch.groupValues[2])
+                        paramsJson.put(key, value)
+                    }
                 }
                 ToolCall(
                     id = "call_${UUID.randomUUID().toString().replace("-", "").take(16)}",
@@ -166,9 +228,21 @@ class OperitChatCompletionServer(
                     )
                 )
             }
-            // XML tool calls are rendered as structured UI widgets by the frontend,
-            // so we don't need to strip them from the text.
-            return ToolCallExtractResult(toolCalls = toolCalls, cleanedText = text)
+            // tool/tool_xxx 标签由前端渲染结构化 widget，保留在正文；
+            // function/tool_call 兼容标签无对应 widget，从展示文本中剥掉避免裸 XML 上屏
+            val cleanedText = if (ordered.any { !it.second }) {
+                buildString {
+                    var lastEnd = 0
+                    ordered.filter { !it.second }.forEach { (match, _) ->
+                        append(text.substring(lastEnd, match.range.first))
+                        lastEnd = match.range.last + 1
+                    }
+                    append(text.substring(lastEnd))
+                }.trim()
+            } else {
+                text
+            }
+            return ToolCallExtractResult(toolCalls = toolCalls, cleanedText = cleanedText)
         }
 
         // Fallback: some models occasionally output tool calls as inline JSON
@@ -232,6 +306,23 @@ class OperitChatCompletionServer(
      * Uses distinctive/required parameters to identify tools with high confidence.
      */
     private fun inferToolNameFromKeys(keys: Set<String>): String? {
+        // --- Device capability tools (action-driven; checked before the generic rules) ---
+        if ("action" in keys && "key" in keys && "namespace" !in keys) return "settings"
+        if ("action" in keys && ("phone" in keys || "contact_id" in keys)) return "contacts"
+        if ("action" in keys && "name" in keys && "path" !in keys &&
+            "source" !in keys && "title" !in keys && "hour" !in keys
+        ) return "contacts"
+        if ("action" in keys && "query" in keys &&
+            "folder_path" !in keys && "path" !in keys && "session_id" !in keys &&
+            "source" !in keys && "chat_id" !in keys
+        ) return "contacts"
+        if ("action" in keys && "media_type" in keys) return "gallery"
+        if ("action" in keys && "days" in keys && "hour" !in keys && "source" !in keys) return "gallery"
+        if ("action" in keys && ("source" in keys || "destination" in keys)) return "file_manager"
+        if ("action" in keys && "pattern" in keys && "path" in keys) return "file_manager"
+        if ("action" in keys && "hour" in keys) return "alarm"
+        if ("action" in keys && "title" in keys) return "calendar"
+
         // --- File tools (most specific first) ---
         if ("pattern" in keys && "use_path_pattern" in keys) return "find_files"
         if ("pattern" in keys && "file_pattern" in keys) return "grep_code"
@@ -425,6 +516,38 @@ class OperitChatCompletionServer(
 
     companion object {
         private const val TAG = "HermesBridge/Server"
+
+        /**
+         * 兼容工具标签名：function 与 tool_call（含 name 属性写法）。
+         * 组号与 ChatMarkupRegex.toolCallPattern 对齐：1=标签名 2=name 属性 3=正文。
+         */
+        private val ALT_TOOL_CALL_PATTERN = Regex(
+            """<(function|tool_call)\b[^>]*name="([^"]+)"[^>]*>([\s\S]*?)</(?:function|tool_call)>(?:\s*</(?:function|tool_call|tool)>)?""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+
+        /**
+         * 双层包裹写法：<tool_call><tool name="gallery">…</function></tool_call>
+         * 组号与 toolCallPattern 对齐：1=外层包裹（丢弃） 2=工具名 3=参数体
+         */
+        private val WRAPPED_TOOL_CALL_PATTERN = Regex(
+            """(<(?:tool_call|function)[^>]*>\s*)<(?:tool|function)[^>]*name="([^"]+)"[^>]*>([\s\S]*?)</(?:tool|function|tool_call)>(?:\s*</(?:function|tool_call)>)?""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+
+        /**
+         * 名字在标签里的写法（真机实录形态）：<function=alarm>…</function>，
+         * 闭合后可能跟残留 </tool>（双连环），一并吞掉。组号与 toolCallPattern 对齐：1=标签名 2=name 3=正文。
+         */
+        private val ALT_TOOL_CALL_EQ_PATTERN = Regex(
+            """<(function|tool_call)=([^>\s]+)>([\s\S]*?)</(?:function|tool_call)>(?:\s*</(?:function|tool_call|tool)>)?""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+
+        /** 参数名字在标签里的写法（真机实录）：parameter= 或 param= 后接名字，组号与 toolParamPattern 对齐：1=name 2=value。 */
+        private val ALT_PARAM_PATTERN = Regex(
+            """<(?:parameter|param)=([^>\s]+)>([\s\S]*?)</(?:parameter|param)>"""
+        )
 
         /** Matches a JSON object {...} embedded in assistant text. */
         private val JSON_OBJECT_REGEX = Regex("""\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}""")

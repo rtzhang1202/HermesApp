@@ -1206,7 +1206,10 @@ open class StandardSystemOperationTools(private val context: Context) {
     }
 
     open suspend fun controlCalendar(tool: AITool): ToolResult {
-        val action = tool.parameters.find { it.name == "action" }?.value?.trim()?.lowercase(Locale.ROOT) ?: "query"
+        // action 缺失时的兜底：带标题就是创建（模型偶尔漏 action），否则查询
+        val actionRaw = tool.parameters.find { it.name == "action" }?.value?.trim()?.lowercase(Locale.ROOT)
+        val hasTitle = tool.parameters.find { it.name == "title" }?.value?.isNotBlank() == true
+        val action = actionRaw?.takeIf { it.isNotBlank() } ?: if (hasTitle) "create" else "query"
         return try {
             when (action) {
                 "query" -> {
@@ -1289,10 +1292,24 @@ open class StandardSystemOperationTools(private val context: Context) {
                             error = "action=create requires title"
                         )
                     }
+                    val durationMinutes =
+                        (tool.parameters.find { it.name == "duration_minutes" }?.value?.toIntOrNull() ?: 60)
+                            .coerceIn(1, 60 * 24 * 30)
+                    val startText = tool.parameters.find { it.name == "start_time_text" }?.value
+                    val parsedStart = parseLocalTimeText(startText)
+                    if (!startText.isNullOrBlank() && parsedStart == null) {
+                        return ToolResult(
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                            error = "Cannot parse start_time_text '$startText'. Use \"YYYY-MM-DD HH:mm\", \"HH:mm\", \"tomorrow HH:mm\" or epoch millis in start_time."
+                        )
+                    }
                     val start = tool.parameters.find { it.name == "start_time" }?.value?.toLongOrNull()
+                        ?: parsedStart
                         ?: (System.currentTimeMillis() + 3_600_000L)
                     val end = tool.parameters.find { it.name == "end_time" }?.value?.toLongOrNull()
-                        ?: (start + 3_600_000L)
+                        ?: (start + durationMinutes * 60_000L)
                     val description = tool.parameters.find { it.name == "description" }?.value?.takeIf { it.isNotBlank() }
                     val location = tool.parameters.find { it.name == "location" }?.value?.takeIf { it.isNotBlank() }
 
@@ -1300,14 +1317,14 @@ open class StandardSystemOperationTools(private val context: Context) {
                         tryGrantPermission(android.Manifest.permission.WRITE_CALENDAR)
                     }
                     if (hasPermission(android.Manifest.permission.WRITE_CALENDAR)) {
-                        // 直接写入主日历
-                        val calendarId = resolveWritableCalendarId()
+                        // 直接写入主日历；没有可写日历时自建一个本地日历账号
+                        val calendarId = ensureWritableCalendarId()
                         if (calendarId == null) {
                             return ToolResult(
                                 toolName = tool.name,
                                 success = false,
                                 result = StringResultData(""),
-                                error = "No writable calendar found on this device."
+                                error = "No writable calendar found on this device and creating a local calendar failed."
                             )
                         }
                         val values = ContentValues().apply {
@@ -1321,21 +1338,41 @@ open class StandardSystemOperationTools(private val context: Context) {
                         }
                         val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
                         val eventId = uri?.lastPathSegment
-                        if (eventId != null) {
-                            ToolResult(
-                                toolName = tool.name,
-                                success = true,
-                                result = StringResultData("Event created: '$title' (id=$eventId, ${fmtMillis(start)} ~ ${fmtMillis(end)})"),
-                                error = ""
-                            )
-                        } else {
-                            ToolResult(
+                        if (eventId == null) {
+                            return ToolResult(
                                 toolName = tool.name,
                                 success = false,
                                 result = StringResultData(""),
                                 error = "Calendar insert failed (contentResolver.insert returned null)."
                             )
                         }
+                        // 回读确认事件真的落库（而不是只看 insert 返回）
+                        var verified = false
+                        try {
+                            context.contentResolver.query(
+                                android.content.ContentUris.withAppendedId(
+                                    CalendarContract.Events.CONTENT_URI, eventId.toLong()
+                                ),
+                                arrayOf(CalendarContract.Events._ID, CalendarContract.Events.TITLE),
+                                null, null, null
+                            )?.use { c -> verified = c.moveToFirst() }
+                        } catch (e: Exception) {
+                            AppLogger.w(TAG, "calendar create verify failed: ${e.message}")
+                        }
+                        if (!verified) {
+                            return ToolResult(
+                                toolName = tool.name,
+                                success = false,
+                                result = StringResultData(""),
+                                error = "Event insert returned id=$eventId but read-back found nothing — event not stored."
+                            )
+                        }
+                        ToolResult(
+                            toolName = tool.name,
+                            success = true,
+                            result = StringResultData("Event created: '$title' (id=$eventId, calendar_id=$calendarId, ${fmtMillis(start)} ~ ${fmtMillis(end)}, verified=true)"),
+                            error = ""
+                        )
                     } else {
                         // 无写权限时降级：唤起系统日历新建界面，由用户确认保存
                         val intent = Intent(Intent.ACTION_INSERT)
@@ -1363,7 +1400,7 @@ open class StandardSystemOperationTools(private val context: Context) {
                             toolName = tool.name,
                             success = false,
                             result = StringResultData(""),
-                            error = "action=delete requires event_id (use action=query to list ids first... note: ids are not shown in query output yet, pass the id from your calendar app)"
+                            error = "action=delete requires event_id (run action=query first — it prints [id=...] for every event)"
                         )
                     }
                     if (!hasPermission(android.Manifest.permission.WRITE_CALENDAR)) {
@@ -1412,7 +1449,135 @@ open class StandardSystemOperationTools(private val context: Context) {
         context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, projection, selection, null, sortOrder)?.use { c ->
             if (c.moveToFirst()) return c.getLong(0)
         }
+        // 退一步：允许 CONTRIBUTOR 级日历（部分 ROM 的主日历不是 OWNER）
+        val relaxed = "${CalendarContract.Calendars.VISIBLE} = 1 AND ${CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL} >= ${CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR}"
+        context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, projection, relaxed, null, sortOrder)?.use { c ->
+            if (c.moveToFirst()) return c.getLong(0)
+        }
         return null
+    }
+
+    /**
+     * 取可写日历；没有的话自建一个本地日历账号（无账号设备/纯本地日历场景），
+     * 否则 calendar create 会一直报 "No writable calendar"。
+     */
+    private fun ensureWritableCalendarId(): Long? {
+        resolveWritableCalendarId()?.let { return it }
+        return try {
+            val uri = CalendarContract.Calendars.CONTENT_URI.buildUpon()
+                .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, "HermesLocal")
+                .appendQueryParameter(
+                    CalendarContract.Calendars.ACCOUNT_TYPE,
+                    CalendarContract.ACCOUNT_TYPE_LOCAL
+                )
+                .build()
+            val values = ContentValues().apply {
+                put(CalendarContract.Calendars.ACCOUNT_NAME, "HermesLocal")
+                put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
+                put(CalendarContract.Calendars.NAME, "HermesLocal")
+                put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, "Hermes")
+                put(CalendarContract.Calendars.CALENDAR_COLOR, 0xFF8B5CF6.toInt())
+                put(
+                    CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+                    CalendarContract.Calendars.CAL_ACCESS_OWNER
+                )
+                put(CalendarContract.Calendars.OWNER_ACCOUNT, "HermesLocal")
+                put(CalendarContract.Calendars.VISIBLE, 1)
+                put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+                put(
+                    CalendarContract.Calendars.CALENDAR_TIME_ZONE,
+                    java.util.TimeZone.getDefault().id
+                )
+            }
+            val id = context.contentResolver.insert(uri, values)?.lastPathSegment?.toLongOrNull()
+            AppLogger.d(TAG, "created local calendar id=$id")
+            id
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "create local calendar failed", e)
+            null
+        }
+    }
+
+    /**
+     * 解析本地时间文本，供 calendar start_time_text 使用。
+     * 支持：2026-11-28 15:00 / 2026/11/28 15:00 / 2026-11-28T15:00 / 2026-11-28 /
+     *      15:00 / 下午3点 / 下午3点半 / tomorrow 15:00 / 明天15:00 / 后天 9:00
+     * 不带日期时按"今天"；不带时间时按 09:00。返回 epoch millis，解析失败返回 null。
+     */
+    private fun parseLocalTimeText(text: String?): Long? {
+        if (text.isNullOrBlank()) return null
+        var t = text.trim().lowercase(Locale.ROOT)
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        var dayOffset: Int? = null
+        val dayWords = listOf(
+            "the day after tomorrow" to 2, "tomorrow" to 1, "today" to 0,
+            "后天" to 2, "明天" to 1, "今天" to 0
+        )
+        for ((word, offset) in dayWords) {
+            if (t.contains(word)) {
+                dayOffset = offset
+                t = t.replace(word, " ")
+                break
+            }
+        }
+        t = t.replace("上午", "am ").replace("下午", "pm ")
+            .replace("早上", "am ").replace("晚上", "pm ")
+            .replace("点钟", "点").replace("点", ":00").replace("半", ":30")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        var year: Int? = null
+        var month: Int? = null
+        var day: Int? = null
+        var hour: Int? = null
+        var minute = 0
+
+        // 日期部分
+        val dateMatch = Regex("""(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})日?""").find(t)
+        if (dateMatch != null) {
+            year = dateMatch.groupValues[1].toIntOrNull()
+            month = dateMatch.groupValues[2].toIntOrNull()?.minus(1)
+            day = dateMatch.groupValues[3].toIntOrNull()
+            t = t.replace(dateMatch.value, " ")
+        }
+        // 时间部分：HH:mm 或 HH
+        val timeMatch = Regex("""(\d{1,2}):(\d{2})""").find(t)
+        if (timeMatch != null) {
+            hour = timeMatch.groupValues[1].toIntOrNull()
+            minute = timeMatch.groupValues[2].toIntOrNull() ?: 0
+        } else {
+            val hourOnly = Regex("""\b(\d{1,2})\b""").find(t)
+            if (hourOnly != null) hour = hourOnly.groupValues[1].toIntOrNull()
+        }
+        val isPm = t.contains("pm")
+        val isAm = t.contains("am")
+        if (hour != null) {
+            if ((isPm || isAm) && hour in 1..12) {
+                if (isPm && hour != 12) hour += 12
+                if (isAm && hour == 12) hour = 0
+            }
+        }
+        if (hour != null && hour !in 0..23) return null
+        if (minute !in 0..59) return null
+
+        if (year != null && month != null && day != null) {
+            cal.set(year, month, day)
+        } else if (dayOffset != null) {
+            cal.add(Calendar.DAY_OF_YEAR, dayOffset)
+        }
+        if (hour != null) {
+            cal.set(Calendar.HOUR_OF_DAY, hour)
+            cal.set(Calendar.MINUTE, minute)
+        } else if (dateMatch != null) {
+            cal.set(Calendar.HOUR_OF_DAY, 9)
+            cal.set(Calendar.MINUTE, 0)
+        } else {
+            return null
+        }
+        return cal.timeInMillis
     }
 
     private fun fmtMillis(millis: Long): String =

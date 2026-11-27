@@ -178,6 +178,22 @@ sealed class Screen(
         }
     }
 
+    data object UserMemory : Screen(navItem = NavItem.UserMemory, titleRes = R.string.user_memory_screen_title) {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                updateNavItem: NavItemChangeHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            com.ai.assistance.operit.ui.features.usermemory.UserMemoryScreen()
+        }
+    }
+
     data object Packages : Screen(navItem = NavItem.Packages) {
         @Composable
         override fun Content(
@@ -1694,6 +1710,7 @@ object OperitRouter {
         return when (navItem) {
             NavItem.AiChat -> Screen.AiChat
             NavItem.MemoryBase -> Screen.MemoryBase
+            NavItem.UserMemory -> Screen.UserMemory
             NavItem.Packages -> Screen.Packages
             NavItem.Toolbox -> Screen.Toolbox
             NavItem.ShizukuCommands -> Screen.ShizukuCommands
