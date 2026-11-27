@@ -21,6 +21,8 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -41,7 +43,6 @@ import com.ai.assistance.operit.data.repository.UserMemoryStore
 import com.ai.assistance.operit.services.accessibility.HermesAccessibilityService
 import com.ai.assistance.operit.ui.features.usermemory.UserMemoryConfirmActivity
 import com.ai.assistance.operit.util.AppLogger
-import com.ai.assistance.operit.voice.VoiceAssistantActivity
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.CoroutineScope
@@ -53,15 +54,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 识屏层（Screen Lens）宿主：无障碍悬浮窗（TYPE_ACCESSIBILITY_OVERLAY）+ Compose 界面。
+ * 识屏层（Screen Lens）宿主。
  *
- * 为什么不是 Activity：Activity 会把目标应用顶到后台，AccessibilityService.getWindows()
- * 随后就看不到目标应用的窗口（实测只剩 [系统窗口, 识屏窗口]），节点树为空。
- * TYPE_ACCESSIBILITY_OVERLAY 不抢焦点，目标应用仍是活动窗口 —— 节点树与截图都能拿到，
- * 也满足「按下即暗化可圈选、不等识别」的交互原则。
+ * 表面分两段，原因是输入法：
+ * 1) **采集 + 圈选**：无障碍悬浮窗（TYPE_ACCESSIBILITY_OVERLAY，不抢焦点）。只有这层能让目标应用
+ *    保持前台，节点树与截图才拿得到；按下即暗化可圈选，不等识别（<150ms 进入可选态）。
+ * 2) **提问 + 结果**：普通 Activity（LensAskActivity）。无障碍悬浮窗永远盖在应用窗口之上、
+ *    且不抢焦点 —— 输入框拿不到输入法。圈选完成后把冻结帧/节点树/选区交给 Activity，
+ *    Activity 用同一份 [ScreenLensState] 与同一套 Compose UI 渲染（像素一致，无闪白），
+ *    悬浮窗在 Activity onResume 后再摘掉，避免过渡期看到真实应用。
  *
- * 时序：按下 → 语音界面 finish + 本悬浮窗立刻出现（暗化/可画）→ 后台轮询目标窗口快照
- * → 无障碍截屏 → 选区 → 本地文字立即展示 → 多模态模型 → 结果面板（占屏 46%）。
+ * 交互（本轮改造）：圈选/全屏都不立即识别 —— 先落到「可编辑选框（整体拖动 + 四角/四边改尺寸，
+ * 触控 44dp）+ 附件条（选区截图缩略图 + 文字摘要，可删）+ 提问框」，点『理解』才发起识别；
+ * 输入框只放用户自己的话，ASR 结果按光标插入/替换选段，绝不整段清空。
  */
 class ScreenLensController private constructor(private val appContext: Context) {
 
@@ -69,6 +74,7 @@ class ScreenLensController private constructor(private val appContext: Context) 
         private const val TAG = "ScreenLens"
         private const val WINDOW_POLL_MS = 30L
         private const val WINDOW_POLL_TIMEOUT_MS = 1500L
+        private const val ASK_SURFACE_GUARD_MS = 4_000L
 
         @Volatile private var INSTANCE: ScreenLensController? = null
 
@@ -89,8 +95,16 @@ class ScreenLensController private constructor(private val appContext: Context) 
     private var host: OverlayHost? = null
     private var captureJob: Job? = null
     private var analyzeJob: Job? = null
+    private var askOpenGuard: Job? = null
     private var lastCrop: Bitmap? = null
     private var firstDrawLogged = false
+
+    /** 提问层（Activity）是否已在运行；运行期间 beginAsk 不再重复拉 Activity */
+    private var askSurfaceAlive = false
+    private var askSurfaceClose: (() -> Unit)? = null
+    private var askOpenAt = 0L
+
+    private var voice: ScreenLensVoiceInput? = null
 
     /** 可选态（悬浮窗已出现、手势可接管）之前用户就点/画了：先记账，等快照到手再执行 */
     private var pendingTap: Pair<Int, Int>? = null
@@ -99,6 +113,9 @@ class ScreenLensController private constructor(private val appContext: Context) 
 
     val isShowing: Boolean
         get() = host != null
+
+    /** Activity 侧取当前会话状态（同一对象，不复制） */
+    fun currentState(): ScreenLensState? = state
 
     // ===================== 显示 / 关闭 =====================
 
@@ -130,32 +147,7 @@ class ScreenLensController private constructor(private val appContext: Context) 
         val overlay = OverlayHost(svc)
         host = overlay
         try {
-            overlay.attach {
-                ScreenLensScreen(
-                        state = newState,
-                        onTap = ::onTapAt,
-                        onDragEnd = ::onDragSelected,
-                        onTrailUpdate = { trail -> newState.trail = trail },
-                        onFullScreen = ::selectFullScreen,
-                        onResetSelection = ::resetSelection,
-                        onClose = { hide() },
-                        onCopy = ::copySelected,
-                        onRemember = ::rememberSelected,
-                        onTranslate = { reAnalyze(appContext.getString(R.string.lens_question_translate)) },
-                        onSearch = ::searchSelected,
-                        onContinueAsk = ::continueInVoice,
-                        onDismissResult = ::dismissResult,
-                        onOpenAccessibilitySettings = {
-                            runCatching {
-                                appContext.startActivity(
-                                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                )
-                            }
-                            hide()
-                        }
-                )
-            }
+            overlay.attach { LensContent(newState, onMicTap = {}) }
             overlay.onFirstDraw = {
                 if (!firstDrawLogged) {
                     firstDrawLogged = true
@@ -174,18 +166,59 @@ class ScreenLensController private constructor(private val appContext: Context) 
     }
 
     fun hide() {
+        hideInternal(notifySurface = true)
+    }
+
+    private fun hideInternal(notifySurface: Boolean) {
+        if (notifySurface) {
+            val cb = askSurfaceClose
+            askSurfaceClose = null
+            askSurfaceAlive = false
+            runCatching { cb?.invoke() }
+        }
         captureJob?.cancel()
         analyzeJob?.cancel()
+        askOpenGuard?.cancel()
         captureJob = null
         analyzeJob = null
+        askOpenGuard = null
         pendingTap = null
         pendingDrag = null
         pendingFull = false
+        runCatching { voice?.cancel() }
         host?.detach()
         host = null
         state = null
         lastCrop = null
         AppLogger.d(TAG, "hidden")
+    }
+
+    // ===================== 提问层面（Activity）=====================
+
+    /** Activity onCreate 时登记关闭回调，保证 hide() 能把 Activity 一起收掉 */
+    fun attachAskSurface(onClose: () -> Unit) {
+        askSurfaceClose = onClose
+    }
+
+    /** Activity onResume：像素已经由 Activity 接管，此时再摘悬浮窗（过渡期不露真实应用） */
+    fun onAskSurfaceShown() {
+        askSurfaceAlive = true
+        askOpenGuard?.cancel()
+        askOpenGuard = null
+        if (host != null) {
+            host?.detach()
+            host = null
+            AppLogger.d(TAG, "ask surface shown sinceAsk=${elapsed(askOpenAt)}ms overlayDetached=true")
+        } else {
+            AppLogger.d(TAG, "ask surface shown sinceAsk=${elapsed(askOpenAt)}ms")
+        }
+    }
+
+    /** Activity onDestroy（用户返回/关闭）→ 整场会话收尾；不再回调 finish（避免递归） */
+    fun onAskSurfaceDestroyed() {
+        askSurfaceAlive = false
+        askSurfaceClose = null
+        if (state != null) hideInternal(notifySurface = false)
     }
 
     // ===================== 采集 =====================
@@ -283,9 +316,10 @@ class ScreenLensController private constructor(private val appContext: Context) 
         val deadline = SystemClock.uptimeMillis() + WINDOW_POLL_TIMEOUT_MS
         var lastSelfLog = 0L
         while (SystemClock.uptimeMillis() < deadline) {
-            val snap = withContext(Dispatchers.IO) {
-                ScreenSnapshotter.captureTopAppWindow(appContext.packageName)
-            }
+            val snap =
+                    withContext(Dispatchers.IO) {
+                        ScreenSnapshotter.captureTopAppWindow(appContext.packageName)
+                    }
             if (snap != null && snap.packageName.isNotBlank()) {
                 AppLogger.d(
                         TAG,
@@ -306,9 +340,20 @@ class ScreenLensController private constructor(private val appContext: Context) 
 
     // ===================== 选区 =====================
 
+    /**
+     * 点按 = 快速选中节点：走同一条提问层（Activity），但**自动发起识别**，
+     * 保留「点完直接出结果」的既有快路径（不需要额外交互）。
+     *
+     * 为什么不再把结果画在悬浮窗里：无障碍服务重连时系统会静默销毁悬浮窗（无回调、无日志），
+     * 结果面板会变成点不动的死图；Activity 不会。
+     */
     private fun onTapAt(x: Float, y: Float) {
         val st = state ?: return
-        if (st.phase != LensPhase.SELECT && st.phase != LensPhase.CAPTURING) return
+        if (st.phase != LensPhase.SELECT &&
+                        st.phase != LensPhase.CAPTURING &&
+                        st.phase != LensPhase.ASK
+        )
+                return
         val snapshot = st.snapshot
         val px = x.toInt()
         val py = y.toInt()
@@ -323,15 +368,20 @@ class ScreenLensController private constructor(private val appContext: Context) 
         AppLogger.d(
                 TAG,
                 "tap ($px,$py) hit=${node?.id ?: -1} label=${node?.label?.take(40) ?: "-"} " +
-                        "bounds=${node?.bounds}"
+                        "bounds=${node?.bounds} fastPath=autoAnalyze"
         )
         st.trail = emptyList()
-        analyzeSelection(LensSelection(LensSelectionKind.NODE, clamp(bounds), node))
+        beginAsk(LensSelection(LensSelectionKind.NODE, clamp(bounds), node), autoSubmit = true)
     }
 
+    /** 圈选完成 → 不识别，进入「选框修正 + 提问」 */
     private fun onDragSelected(points: List<androidx.compose.ui.geometry.Offset>) {
         val st = state ?: return
-        if (st.phase != LensPhase.SELECT && st.phase != LensPhase.CAPTURING) return
+        if (st.phase != LensPhase.SELECT &&
+                        st.phase != LensPhase.CAPTURING &&
+                        st.phase != LensPhase.ASK
+        )
+                return
         if (st.snapshot == null && st.bitmap == null) {
             pendingDrag = points
             AppLogger.d(TAG, "drag deferred: snapshot not ready points=${points.size}")
@@ -339,9 +389,10 @@ class ScreenLensController private constructor(private val appContext: Context) 
         }
         val rect = clamp(normalizeSelectionRect(points, 1f, 1f))
         AppLogger.d(TAG, "lasso bounds=$rect points=${points.size}")
-        analyzeSelection(LensSelection(LensSelectionKind.PATH, rect))
+        beginAsk(LensSelection(LensSelectionKind.PATH, rect))
     }
 
+    /** 全屏 → 同样先提问（空输入可直接『理解』） */
     private fun selectFullScreen() {
         val st = state ?: return
         val bmp = st.bitmap
@@ -356,7 +407,75 @@ class ScreenLensController private constructor(private val appContext: Context) 
                 else snap?.let { Rect(0, 0, it.displayWidth, it.displayHeight) }
                         ?: Rect(0, 0, 1080, 2400)
         AppLogger.d(TAG, "full screen selected bounds=$rect")
-        analyzeSelection(LensSelection(LensSelectionKind.FULL, rect))
+        beginAsk(LensSelection(LensSelectionKind.FULL, rect))
+    }
+
+    /** 进入提问步：冻结帧上显示可编辑选框 + 附件 + 输入框，只有『理解』才识别。
+     *  [autoSubmit]=true 用于点按快路径：面板拉起来后立刻识别（用户不需要再点一次）。 */
+    private fun beginAsk(sel: LensSelection, autoSubmit: Boolean = false) {
+        val st = state ?: return
+        st.selection = sel
+        st.phase = LensPhase.ASK
+        st.trail = emptyList()
+        st.result = null
+        st.analyzeError = null
+        st.asrDetail = null
+        refreshAttachments()
+        AppLogger.d(
+                TAG,
+                "ask opened kind=${sel.kind} bounds=${sel.bounds} surfaceAlive=$askSurfaceAlive " +
+                        "autoSubmit=$autoSubmit hint=${if (autoSubmit) "tap fast path" else "no analyze until submit"}"
+        )
+        if (!askSurfaceAlive) {
+            askOpenAt = SystemClock.uptimeMillis()
+            val intent =
+                    Intent(appContext, LensAskActivity::class.java)
+                            .addFlags(
+                                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                                            Intent.FLAG_ACTIVITY_NO_ANIMATION
+                            )
+            val ok =
+                    runCatching {
+                                appContext.startActivity(intent)
+                                true
+                            }
+                            .getOrDefault(false)
+            AppLogger.d(TAG, "ask activity start ok=$ok")
+            if (!ok && !autoSubmit) {
+                revertAskToSelect()
+                return
+            }
+            if (ok) {
+                askOpenGuard?.cancel()
+                askOpenGuard =
+                        scope.launch {
+                            delay(ASK_SURFACE_GUARD_MS)
+                            if (!askSurfaceAlive) {
+                                AppLogger.w(
+                                        TAG,
+                                        "ask surface missing after ${ASK_SURFACE_GUARD_MS}ms"
+                                )
+                                if (!autoSubmit) revertAskToSelect()
+                            }
+                        }
+            }
+        }
+        if (autoSubmit) {
+            analyzeSelection(
+                    LensSelection(sel.kind, Rect(sel.bounds), sel.node),
+                    question = null,
+                    includeImage = st.attachImage,
+                    includeText = st.attachText
+            )
+        }
+    }
+
+    private fun revertAskToSelect() {
+        val st = state ?: return
+        if (st.phase == LensPhase.ASK) st.phase = LensPhase.SELECT
+        askOpenGuard?.cancel()
+        askOpenGuard = null
+        toast(R.string.lens_ask_open_failed)
     }
 
     private fun resetSelection() {
@@ -368,6 +487,10 @@ class ScreenLensController private constructor(private val appContext: Context) 
         st.analyzing = false
         st.localText = ""
         st.analyzeError = null
+        st.asrDetail = null
+        runCatching { voice?.cancel() }
+        st.asrState = LensAsrState.IDLE
+        AppLogger.d(TAG, "selection reset (back to lasso)")
     }
 
     private fun dismissResult() {
@@ -396,9 +519,218 @@ class ScreenLensController private constructor(private val appContext: Context) 
         return out
     }
 
+    // ===================== 选框修正 =====================
+
+    private fun onRectEditStart(grab: RectGrab, before: Rect) {
+        AppLogger.d(TAG, "rectEdit begin grab=$grab before=$before")
+    }
+
+    private fun onRectEdited(rect: Rect) {
+        val st = state ?: return
+        val sel = st.selection ?: return
+        st.selection = LensSelection(sel.kind, clamp(rect), sel.node)
+    }
+
+    private fun onRectEditEnd(grab: RectGrab, before: Rect, after: Rect) {
+        val st = state ?: return
+        val sel = st.selection ?: return
+        val finalRect = clamp(after)
+        st.selection = LensSelection(sel.kind, finalRect, sel.node)
+        refreshAttachments()
+        AppLogger.d(
+                TAG,
+                "rectEdit end grab=$grab before=$before after=$finalRect " +
+                        "w=${finalRect.width()} h=${finalRect.height()}"
+        )
+    }
+
+    /** 附件条数据：选中截图缩略图 + 文字摘要（改框后重算） */
+    private fun refreshAttachments() {
+        val st = state ?: return
+        val sel = st.selection ?: return
+        val text = st.snapshot?.textIn(sel.bounds).orEmpty()
+        st.selectionText = text
+        st.thumb = st.bitmap?.let { thumbOf(it, sel.bounds) }
+        AppLogger.d(
+                TAG,
+                "attachments bounds=${sel.bounds} textLen=${text.length} " +
+                        "thumb=${st.thumb?.let { "${it.width}x${it.height}" } ?: "none"} " +
+                        "image=${st.attachImage} text=${st.attachText}"
+        )
+    }
+
+    private fun thumbOf(source: Bitmap, bounds: Rect, maxSide: Int = 256): Bitmap? {
+        val rect = Rect(clamp(bounds))
+        rect.intersect(0, 0, source.width, source.height)
+        if (rect.isEmpty) return null
+        return try {
+            val raw = Bitmap.createBitmap(source, rect.left, rect.top, rect.width(), rect.height())
+            val side = maxOf(raw.width, raw.height)
+            val out =
+                    if (side <= maxSide) raw
+                    else
+                            Bitmap.createScaledBitmap(
+                                    raw,
+                                    (raw.width * maxSide / side).coerceAtLeast(1),
+                                    (raw.height * maxSide / side).coerceAtLeast(1),
+                                    true
+                            )
+            if (out !== raw && raw !== source) raw.recycle()
+            out
+        } catch (t: Throwable) {
+            AppLogger.w(TAG, "thumb failed: ${t.message}")
+            null
+        }
+    }
+
+    // ===================== 提问 / 语音 =====================
+
+    /** 『理解』/『继续问』：ASK 是首次提问，RESULT 是带上一轮回答的追问 */
+    fun submitQuestion() {
+        val st = state ?: return
+        val sel = st.selection ?: return
+        val question = st.askField.text.trim()
+        val followUp = st.phase == LensPhase.RESULT
+        val previousAnswer = if (followUp) st.result?.answer else null
+        AppLogger.d(
+                TAG,
+                "submit followUp=$followUp bounds=${sel.bounds} " +
+                        "question=${question.ifBlank { "<empty→default>" }} " +
+                        "attachImage=${st.attachImage} attachText=${st.attachText}"
+        )
+        // 输入框只放用户自己的话：提交后清空，避免把选中内容或旧问题留在框里
+        st.askField = TextFieldValue("")
+        analyzeSelection(
+                LensSelection(sel.kind, Rect(sel.bounds), sel.node),
+                question.takeIf { it.isNotBlank() },
+                st.attachImage,
+                st.attachText,
+                previousAnswer
+        )
+    }
+
+    fun toggleMic() {
+        val st = state ?: return
+        when (st.asrState) {
+            LensAsrState.IDLE -> {
+                st.asrDetail = null
+                voiceInput().start()
+            }
+            LensAsrState.LISTENING -> voiceInput().stop()
+            LensAsrState.RECOGNIZING -> Unit
+        }
+    }
+
+    fun onMicDenied() {
+        val st = state ?: return
+        st.asrState = LensAsrState.IDLE
+        st.asrDetail = appContext.getString(R.string.lens_asr_mic_denied)
+        AppLogger.w(TAG, "mic permission denied, text input only")
+    }
+
+    private fun voiceInput(): ScreenLensVoiceInput =
+            voice ?: ScreenLensVoiceInput(appContext) { ev -> onVoiceEvent(ev) }.also { voice = it }
+
+    private fun onVoiceEvent(ev: ScreenLensVoiceInput.Event) {
+        val st = state ?: return
+        when (ev) {
+            is ScreenLensVoiceInput.Event.Listening -> {
+                st.asrState = LensAsrState.LISTENING
+                st.asrDetail = appContext.getString(R.string.lens_asr_listening)
+                AppLogger.d(TAG, "asr listening engine=${ev.engine} lang=zh")
+            }
+            is ScreenLensVoiceInput.Event.Volume -> st.volume = ev.level
+            is ScreenLensVoiceInput.Event.Recognizing -> {
+                st.asrState = LensAsrState.RECOGNIZING
+                st.volume = 0f
+                st.asrDetail =
+                        appContext.getString(
+                                if (ev.engine.startsWith("cloud")) R.string.lens_asr_recognizing
+                                else R.string.lens_asr_recognizing_local
+                        )
+                AppLogger.d(TAG, "asr recognizing engine=${ev.engine}")
+            }
+            is ScreenLensVoiceInput.Event.Info -> {
+                st.asrDetail = ev.text
+                AppLogger.d(TAG, "asr info: ${ev.text}")
+            }
+            is ScreenLensVoiceInput.Event.Final -> {
+                st.asrState = LensAsrState.IDLE
+                st.volume = 0f
+                st.asrDetail = null
+                appendAsrText(st, ev.text)
+            }
+            is ScreenLensVoiceInput.Event.Failed -> {
+                st.asrState = LensAsrState.IDLE
+                st.volume = 0f
+                st.asrDetail = appContext.getString(R.string.lens_asr_failed, ev.reason)
+                AppLogger.w(TAG, "asr failed: ${ev.reason}")
+            }
+        }
+    }
+
+    /**
+     * ASR 回填：只负责「用户提问」这一段 —— 在光标处插入 / 替换当前选段，
+     * 绝不整段清空已有手输内容；无有效光标时按追加处理。
+     */
+    private fun appendAsrText(st: ScreenLensState, asrText: String) {
+        val clean = asrText.trim()
+        if (clean.isBlank()) {
+            st.asrDetail = appContext.getString(R.string.lens_asr_empty)
+            AppLogger.w(TAG, "asr final empty, field untouched")
+            return
+        }
+        val tv = st.askField
+        val before = tv.text
+        val sel = tv.selection
+        val start: Int
+        val end: Int
+        val reason: String
+        if (sel.collapsed && sel.start == 0 && before.isNotEmpty()) {
+            // 从未落光标（常见：刚打完字就点麦克风）→ 追加到末尾，绝不清空
+            start = before.length
+            end = before.length
+            reason = "append-no-cursor"
+        } else {
+            start = sel.min.coerceIn(0, before.length)
+            end = sel.max.coerceIn(0, before.length)
+            reason = if (start == end) "insert-cursor" else "replace-selection"
+        }
+        val needLeadingSpace =
+                start > 0 &&
+                        !before[start - 1].isWhitespace() &&
+                        !clean.first().isWhitespace() &&
+                        clean.first() !in "，。,.!?！？;；:：、）)】]"
+        val needTrailingSpace =
+                end < before.length &&
+                        !before[end].isWhitespace() &&
+                        !clean.last().isWhitespace()
+        val insert =
+                (if (needLeadingSpace) " " else "") +
+                        clean +
+                        (if (needTrailingSpace) " " else "")
+        val newText = before.substring(0, start) + insert + before.substring(end)
+        val cursor = start + insert.length
+        st.askField = TextFieldValue(newText, androidx.compose.ui.text.TextRange(cursor))
+        st.asrState = LensAsrState.IDLE
+        st.volume = 0f
+        st.asrDetail = null
+        AppLogger.d(
+                TAG,
+                "asr fill mode=$reason beforeLen=${before.length} afterLen=${newText.length} " +
+                        "cursor=$cursor keptUserText=${before.isNotEmpty()} text=${clean.take(60)}"
+        )
+    }
+
     // ===================== 识别 =====================
 
-    private fun analyzeSelection(selection: LensSelection, question: String? = null) {
+    private fun analyzeSelection(
+            selection: LensSelection,
+            question: String? = null,
+            includeImage: Boolean = true,
+            includeText: Boolean = true,
+            previousAnswer: String? = null
+    ) {
         val st = state ?: return
         analyzeJob?.cancel()
         st.selection = selection
@@ -407,15 +739,18 @@ class ScreenLensController private constructor(private val appContext: Context) 
         st.result = null
         st.analyzeError = null
         st.lastQuestion = question
+        st.asrDetail = null
         val snapshot = st.snapshot
         val localText = snapshot?.textIn(selection.bounds).orEmpty()
         st.localText = localText
-        val crop = st.bitmap?.let { cropForModel(it, selection.bounds) }
+        val crop = if (includeImage) st.bitmap?.let { cropForModel(it, selection.bounds) } else null
         lastCrop = crop
         AppLogger.d(
                 TAG,
                 "analyze start bounds=${selection.bounds} localTextLen=${localText.length} " +
-                        "crop=${crop?.width}x${crop?.height} question=${question ?: "-"}"
+                        "crop=${crop?.width}x${crop?.height} question=${question ?: "<default>"} " +
+                        "attachImage=$includeImage attachText=$includeText " +
+                        "followUp=${previousAnswer != null}"
         )
         analyzeJob =
                 scope.launch {
@@ -425,7 +760,10 @@ class ScreenLensController private constructor(private val appContext: Context) 
                                     crop = crop,
                                     snapshot = snapshot,
                                     selection = selection.bounds,
-                                    question = question
+                                    question = question,
+                                    localText = localText,
+                                    includeText = includeText,
+                                    previousAnswer = previousAnswer
                             )
                     if (state !== st) return@launch
                     st.result = outcome.result
@@ -447,8 +785,14 @@ class ScreenLensController private constructor(private val appContext: Context) 
     }
 
     private fun reAnalyze(question: String) {
-        val sel = state?.selection ?: return
-        analyzeSelection(sel, question)
+        val st = state ?: return
+        val sel = st.selection ?: return
+        analyzeSelection(
+                LensSelection(sel.kind, Rect(sel.bounds), sel.node),
+                question,
+                st.attachImage,
+                st.attachText
+        )
     }
 
     private fun cropForModel(source: Bitmap, bounds: Rect): Bitmap? {
@@ -509,8 +853,10 @@ class ScreenLensController private constructor(private val appContext: Context) 
             return
         }
         val scene = st.result?.scene.orEmpty()
-        val title = appContext.getString(R.string.lens_memory_title_prefix) + (scene.ifBlank { text.take(18) })
-        val thumbPath = saveThumbnail(lastCrop)
+        val title =
+                appContext.getString(R.string.lens_memory_title_prefix) +
+                        (scene.ifBlank { text.take(18) })
+        val thumbPath = saveThumbnail(lastCrop ?: st.thumb)
         val pkg = st.snapshot?.packageName
         val sensitivity = sensitivityOf(text)
         scope.launch {
@@ -548,7 +894,7 @@ class ScreenLensController private constructor(private val appContext: Context) 
                             "conflict=${item.conflictWithId} thumb=$thumbPath"
             )
             toast(R.string.lens_saved_pending)
-            // 悬浮窗在确认卡之上会挡住它：先收起识屏层，再拉起记忆确认卡
+            // 确认卡要盖在最上面：先收起识屏层（含提问 Activity），再拉起记忆确认卡
             hide()
             val shown = UserMemoryConfirmActivity.show(appContext, item.id)
             AppLogger.d(TAG, "memory confirm card shown=$shown")
@@ -566,33 +912,16 @@ class ScreenLensController private constructor(private val appContext: Context) 
         if (!ok) {
             runCatching {
                 appContext.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.bing.com/search?q=" + Uri.encode(text)))
+                        Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://www.bing.com/search?q=" + Uri.encode(text))
+                                )
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }
         }
         AppLogger.d(TAG, "search dispatched len=${text.length} direct=$ok")
         hide()
-    }
-
-    private fun continueInVoice() {
-        val text = currentText().trim()
-        val raw =
-                appContext.getString(R.string.lens_ask_prefix) +
-                        (if (text.length > 500) text.take(500) + "…" else text) +
-                        appContext.getString(R.string.lens_ask_suffix)
-        // 预填框只有 3 行：把换行压成空格，保证「请帮我：」这段尾巴也能看见
-        val context = raw.replace('\n', ' ').replace(Regex(" {2,}"), " ").trim()
-        val intent =
-                Intent(appContext, VoiceAssistantActivity::class.java).apply {
-                    action = VoiceAssistantActivity.ACTION_OPEN_VOICE_ASSISTANT
-                    putExtra(VoiceAssistantActivity.EXTRA_TEXT, context)
-                    putExtra(VoiceAssistantActivity.EXTRA_AUTO_SEND, false)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                }
-        hide()
-        runCatching { appContext.startActivity(intent) }
-        AppLogger.d(TAG, "continue in voice, prefillLen=${context.length}")
     }
 
     // ===================== 杂项 =====================
@@ -637,6 +966,54 @@ class ScreenLensController private constructor(private val appContext: Context) 
     }
 
     private fun elapsed(t0: Long): Long = if (t0 <= 0L) -1L else SystemClock.uptimeMillis() - t0
+
+    // ===================== 共享 Compose 内容 =====================
+
+    /** 悬浮窗与提问 Activity 用同一套 UI（同一 state），像素无缝 */
+    @Composable
+    fun LensContent(
+            state: ScreenLensState,
+            onMicTap: () -> Unit,
+            extraBottomInset: androidx.compose.ui.unit.Dp = 0.dp
+    ) {
+        ScreenLensScreen(
+                state = state,
+                onTap = ::onTapAt,
+                onDragEnd = ::onDragSelected,
+                onTrailUpdate = { trail -> state.trail = trail },
+                onFullScreen = ::selectFullScreen,
+                onResetSelection = ::resetSelection,
+                onClose = { hide() },
+                onCopy = ::copySelected,
+                onRemember = ::rememberSelected,
+                onTranslate = { reAnalyze(appContext.getString(R.string.lens_question_translate)) },
+                onSearch = ::searchSelected,
+                onDismissResult = ::dismissResult,
+                onSubmitQuestion = ::submitQuestion,
+                onRectEditStart = ::onRectEditStart,
+                onRectEdited = ::onRectEdited,
+                onRectEditEnd = ::onRectEditEnd,
+                onMicTap = onMicTap,
+                onRemoveAttachImage = {
+                    state.attachImage = false
+                    AppLogger.d(TAG, "attachment removed: image")
+                },
+                onRemoveAttachText = {
+                    state.attachText = false
+                    AppLogger.d(TAG, "attachment removed: text")
+                },
+                onOpenAccessibilitySettings = {
+                    runCatching {
+                        appContext.startActivity(
+                                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                    hide()
+                },
+                extraBottomInset = extraBottomInset
+        )
+    }
 
     // ===================== 悬浮窗宿主 =====================
 

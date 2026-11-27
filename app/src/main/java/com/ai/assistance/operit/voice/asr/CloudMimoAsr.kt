@@ -55,8 +55,18 @@ class CloudMimoAsr(
         private const val TIMEOUT_SEC = 180L
 
         // ---- 能量 VAD 门控（缺陷2：静音不送 ASR，防 LLM-ASR 底噪幻觉） ----
-        /** RMS 语音阈值（16bit 满量程 32768；正常说话 RMS 常在 1000-8000，底噪通常 <300） */
-        private const val RMS_SPEECH_THRESHOLD = 500.0
+        /**
+         * 门槛不再固定 500：正常音量/离麦稍远时一句话的 RMS 常在 200~400，固定 500 会整段误杀；
+         * 且旧逻辑只缓存「过门槛」的块 → 送上去的音频断断续续，转写大面积错字。
+         * 现改为「噪声底底噪 × 2.5，夹在下限 180 / 上限 600」，并加 400ms 预卷 + 300ms 拖尾。
+         */
+        private const val MIN_SPEECH_THRESHOLD = 180.0
+        private const val MAX_SPEECH_THRESHOLD = 600.0
+        private const val NOISE_FACTOR = 2.5
+        /** 语音起点前预卷块数（每块 100ms）：避免「说什么」的起音被切 */
+        private const val PREROLL_CHUNKS = 4
+        /** 语音尾音拖尾块数：短暂停顿也收进去，避免词尾被切断 */
+        private const val HANGOVER_CHUNKS = 3
         /** 最短有效语音时长：低于该值视为未听到语音，不送云端 */
         private const val MIN_SPEECH_MS = 300
     }
@@ -79,6 +89,8 @@ class CloudMimoAsr(
     // ---- VAD 门控统计（recordLoop 写，stopListening 在 join 后读） ----
     @Volatile private var vadRmsPeak = 0.0
     @Volatile private var vadSpeechMs = 0L
+    @Volatile private var vadThreshold = 0.0
+    @Volatile private var vadNoiseFloor = 0.0
 
     // ---- 识别状态 ----
     @Volatile private var recognitionJob: Job? = null
@@ -127,14 +139,13 @@ class CloudMimoAsr(
             throw AsrException(AsrErrorKind.NO_MIC, "设备不支持 16kHz 录音 (code=$minBuf)")
         }
         val bufSize = maxOf(minBuf, SAMPLE_RATE * 2 / 5 * 4) // ≥400ms
-        val rec = try {
-            AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                SAMPLE_RATE, channel, encoding, bufSize
-            )
-        } catch (t: Throwable) {
-            throw AsrException(AsrErrorKind.NO_MIC, "创建录音器失败: ${t.message}", t)
-        }
+        // ASR 专用音源：VOICE_RECOGNITION 不做 AEC/AGC。
+        // VOICE_COMMUNICATION 会开回声消除（把外放/近场语音一起削掉）并做自动增益（压字），
+        // 实测同一句话转写大面积错字；拿不到就退回 MIC（纯麦克风，无预处理）。
+        val rec =
+                createRecorder(MediaRecorder.AudioSource.VOICE_RECOGNITION, channel, encoding, bufSize)
+                        ?: createRecorder(MediaRecorder.AudioSource.MIC, channel, encoding, bufSize)
+                        ?: throw AsrException(AsrErrorKind.NO_MIC, "创建录音器失败（无可用音源）")
         if (rec.state != AudioRecord.STATE_INITIALIZED) {
             rec.release()
             throw AsrException(AsrErrorKind.NO_MIC, "录音器初始化失败（无麦克风？）")
@@ -156,6 +167,29 @@ class CloudMimoAsr(
         recordJob = scope.launch { recordLoop(rec, listener) }
     }
 
+    /** 建 AudioRecord：失败/未初始化返回 null，让调用方降级到下一个音源 */
+    private fun createRecorder(
+            source: Int,
+            channel: Int,
+            encoding: Int,
+            bufSize: Int
+    ): AudioRecord? {
+        val rec =
+                try {
+                    AudioRecord(source, SAMPLE_RATE, channel, encoding, bufSize)
+                } catch (t: Throwable) {
+                    AppLogger.w(TAG, "createRecorder source=$source failed: ${t.message}")
+                    return null
+                }
+        if (rec.state != AudioRecord.STATE_INITIALIZED) {
+            AppLogger.w(TAG, "createRecorder source=$source not initialized, fallback")
+            runCatching { rec.release() }
+            return null
+        }
+        AppLogger.i(TAG, "recorder source=$source buf=$bufSize rate=$SAMPLE_RATE")
+        return rec
+    }
+
     /** 录音循环：100ms 块读取 → 能量 VAD 门控（仅语音段入缓冲）+ 音量回调；读失败/超上限交付错误态 */
     private fun recordLoop(rec: AudioRecord, lst: AsrListener) {
         val chunk = ByteArray(SAMPLE_RATE * 2 / 10)
@@ -164,6 +198,11 @@ class CloudMimoAsr(
         var rmsPeak = 0.0          // 全程 RMS 峰值（调参日志用）
         var speechMs = 0L          // 判定为语音的累计时长
         var speechChunks = 0
+        // ---- 自适应门控状态 ----
+        var noiseFloor = 0.0                              // 噪声底（慢跟，只吃安静块）
+        var threshold = MIN_SPEECH_THRESHOLD              // 当前生效门槛
+        var hangoverLeft = 0                              // 尾音拖尾剩余块
+        val preRoll = ArrayDeque<ByteArray>()             // 语音起点前的预卷
         try {
             while (recording && !stopRequested) {
                 val n = try {
@@ -190,11 +229,34 @@ class CloudMimoAsr(
                 readFailures = 0
                 val rms = rmsOf(chunk, n)
                 if (rms > rmsPeak) rmsPeak = rms
-                // ---- 能量 VAD 门控：静音段不入缓冲（不送 ASR） ----
-                if (rms >= RMS_SPEECH_THRESHOLD) {
+                // ---- 自适应门槛：底噪 ×2.5，夹在 [180,600]（固定 500 会误杀正常音量） ----
+                if (rms < threshold) {
+                    noiseFloor = if (noiseFloor <= 0.0) rms else noiseFloor * 0.95 + rms * 0.05
+                    threshold =
+                        (noiseFloor * NOISE_FACTOR)
+                            .coerceIn(MIN_SPEECH_THRESHOLD, MAX_SPEECH_THRESHOLD)
+                }
+                val chunkMs = n * 1000L / 2 / SAMPLE_RATE
+                val voiced = rms >= threshold
+                if (voiced) {
+                    // 首块语音：把预卷补进来，别把起音吃掉
+                    if (preRoll.isNotEmpty()) {
+                        synchronized(pcmBuffer) {
+                            for (p in preRoll) pcmBuffer.write(p, 0, p.size)
+                        }
+                        preRoll.clear()
+                    }
                     synchronized(pcmBuffer) { pcmBuffer.write(chunk, 0, n) }
-                    speechMs += n * 1000L / 2 / SAMPLE_RATE
+                    speechMs += chunkMs
                     speechChunks++
+                    hangoverLeft = HANGOVER_CHUNKS
+                } else if (hangoverLeft > 0) {
+                    // 语音尾音：短暂静音照样收入，避免词尾被切
+                    synchronized(pcmBuffer) { pcmBuffer.write(chunk, 0, n) }
+                    hangoverLeft--
+                } else {
+                    preRoll.addLast(chunk.copyOf(n))
+                    if (preRoll.size > PREROLL_CHUNKS) preRoll.removeFirst()
                 }
                 lst.onVolume(volumeOf(chunk, n))
                 if (System.currentTimeMillis() - startAtMs >= MAX_RECORD_MS) {
@@ -212,9 +274,11 @@ class CloudMimoAsr(
         } finally {
             vadRmsPeak = rmsPeak
             vadSpeechMs = speechMs
+            vadThreshold = threshold
+            vadNoiseFloor = noiseFloor
             AppLogger.i(
                 TAG,
-                "vad stats rmsPeak=$rmsPeak threshold=$RMS_SPEECH_THRESHOLD " +
+                "vad stats rmsPeak=$rmsPeak threshold=$threshold floor=$noiseFloor " +
                     "speechMs=$speechMs speechChunks=$speechChunks"
             )
             recording = false
@@ -241,12 +305,14 @@ class CloudMimoAsr(
             AppLogger.i(
                 TAG,
                 "vad reject: speechMs=$vadSpeechMs < ${MIN_SPEECH_MS}ms " +
-                    "rmsPeak=$vadRmsPeak → not sending to ASR"
+                    "rmsPeak=$vadRmsPeak threshold=$vadThreshold floor=$vadNoiseFloor " +
+                    "→ not sending to ASR"
             )
             deliverError(
                 AsrException(
                     AsrErrorKind.EMPTY_AUDIO,
-                    "未听到语音（有效语音 ${vadSpeechMs}ms，RMS 峰值 ${vadRmsPeak.toLong()}）"
+                    "未听到语音（有效语音 ${vadSpeechMs}ms，RMS 峰值 ${vadRmsPeak.toLong()}，" +
+                        "门槛 ${vadThreshold.toLong()}）"
                 ),
                 lst
             )

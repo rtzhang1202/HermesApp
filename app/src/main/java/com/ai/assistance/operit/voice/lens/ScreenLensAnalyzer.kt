@@ -42,7 +42,10 @@ object ScreenLensAnalyzer {
             crop: Bitmap?,
             snapshot: ScreenSnapshot?,
             selection: Rect,
-            question: String?
+            question: String?,
+            localText: String? = null,
+            includeText: Boolean = true,
+            previousAnswer: String? = null
     ): Outcome = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()
         val msm = MultiServiceManager(context.applicationContext)
@@ -52,8 +55,18 @@ object ScreenLensAnalyzer {
         val visionEnabled = config?.enableDirectImageProcessing ?: false
         val modelName = config?.modelName.orEmpty()
 
-        val localText = snapshot?.textIn(selection).orEmpty()
-        val prompt = buildPrompt(snapshot, selection, localText, question, visionEnabled)
+        // includeText=false（用户删掉文字附件）→ 不把节点文字/节点清单塞进提示词，只按问题+图片作答
+        val screenText =
+                if (includeText) (localText ?: snapshot?.textIn(selection).orEmpty()) else ""
+        val prompt =
+                buildPrompt(
+                        snapshot = if (includeText) snapshot else null,
+                        selection = selection,
+                        localText = screenText,
+                        question = question,
+                        visionEnabled = visionEnabled,
+                        previousAnswer = previousAnswer
+                )
 
         var imageId: String? = null
         var raw = ""
@@ -109,7 +122,7 @@ object ScreenLensAnalyzer {
         }
 
         val elapsed = System.currentTimeMillis() - started
-        val parsed = parse(raw, localText)
+        val parsed = parse(raw, screenText)
         AppLogger.d(
                 TAG,
                 "result elapsed=${elapsed}ms rawLen=${raw.length} scene=${parsed.scene} " +
@@ -123,10 +136,11 @@ object ScreenLensAnalyzer {
             selection: Rect,
             localText: String,
             question: String?,
-            visionEnabled: Boolean
+            visionEnabled: Boolean,
+            previousAnswer: String?
     ): String {
         val sb = StringBuilder()
-        sb.append("用户在手机上选中了一块屏幕区域。")
+        sb.append("用户在手机上选中了一块屏幕区域（附件）。")
         if (visionEnabled) sb.append("附图为该区域的截图。")
         sb.append(
                 "请理解这块内容并回答。只输出 JSON，字段：" +
@@ -153,6 +167,11 @@ object ScreenLensAnalyzer {
         }
         if (localText.isNotBlank()) {
             sb.append("\n选区本地文字（按阅读顺序，可能不全）：\n").append(localText.take(1600)).append('\n')
+        }
+        if (!previousAnswer.isNullOrBlank()) {
+            sb.append("\n上一轮已给出的回答（用户正在追问，请结合它，不要重复整段）：\n")
+                    .append(previousAnswer.take(800))
+                    .append('\n')
         }
         sb.append("\n用户问题：")
                 .append(question?.takeIf { it.isNotBlank() } ?: "这块内容是什么？请提取要点并说明。")

@@ -86,8 +86,28 @@
     <string name="lens_model_failed">模型没有返回结果，已保留本地提取的文字。</string>
     <string name="lens_vision_off">当前识图模型未开启图片输入，本次仅按节点文字识别。</string>
     <string name="lens_question_translate">把选中的文字翻译成中文（若原文已是中文则译成英文），只给译文和一句简短说明。</string>
-    <string name="lens_ask_prefix">关于我刚才在屏幕上选中的内容：\n</string>
-    <string name="lens_ask_suffix">\n\n请帮我：</string>
+
+    <!-- 识屏提问步（圈选后可修框 + 语音/打字提问，点『理解』才识别） -->
+    <string name="lens_hint_ask">调整选框，再问我一句</string>
+    <string name="lens_ask_hint_rect">拖动选框可移动，四角/四边可改大小</string>
+    <string name="lens_ask_placeholder">想问什么？可留空直接理解</string>
+    <string name="lens_followup_placeholder">继续问…（可留空）</string>
+    <string name="lens_ask_submit">理解</string>
+    <string name="lens_asked_prefix">你的问题：</string>
+    <string name="lens_attach_image">选中截图</string>
+    <string name="lens_attach_text">选中文字</string>
+    <string name="lens_attach_remove">移除附件</string>
+    <string name="lens_attach_none">无附件（仅按你的问题作答）</string>
+    <string name="lens_ask_voice">语音输入</string>
+    <string name="lens_asr_listening">正在听…再点麦克风结束</string>
+    <string name="lens_asr_recognizing">云端识别中…</string>
+    <string name="lens_asr_recognizing_local">离线识别中…</string>
+    <string name="lens_asr_failed">语音识别失败：%1$s（可直接打字）</string>
+    <string name="lens_asr_mic_denied">没有麦克风权限，请在系统设置允许录音，或直接打字</string>
+    <string name="lens_asr_fallback_local">云端连接失败，已切本地离线识别，请再说一次</string>
+    <string name="lens_asr_timeout">语音识别超时</string>
+    <string name="lens_asr_empty">没听清，已保留输入框内容</string>
+    <string name="lens_ask_open_failed">无法打开提问界面，请重试</string>
 
     <color name="voice_bg">#0F0E13</color>
     <color name="voice_accent">#8B5CF6</color>
@@ -108,8 +128,10 @@
     <style name="lens_theme" parent="Theme.Operit">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
+        <!-- 不透明窗口：translucent 窗口在部分 ROM（Nothing OS 实测）拿不到 IME inset，
+             提问框会被键盘整块盖住；冻结帧本来就整屏重绘，不需要透出下层应用。 -->
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">@android:color/black</item>
         <item name="android:backgroundDimEnabled">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

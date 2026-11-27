@@ -320,7 +320,17 @@
         </activity>
 
         <!-- 识屏层（Screen Lens）用无障碍悬浮窗实现（TYPE_ACCESSIBILITY_OVERLAY，不抢焦点），
-             这样目标应用仍是活动窗口，节点树可读；UI 由 voice/lens/ScreenLensController 挂载。 -->
+             这样目标应用仍是活动窗口，节点树可读；UI 由 voice/lens/ScreenLensController 挂载。
+             圈选完成后的「提问 + 结果」交给下面的 LensAskActivity：悬浮窗不抢焦点拿不到输入法。 -->
+        <activity
+            android:name=".voice.lens.LensAskActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/lens_theme"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- Broadcast wake entry for external key apps (KeyPilot) -->
         <receiver

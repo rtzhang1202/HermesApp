@@ -86,8 +86,28 @@
     <string name="lens_model_failed">The model returned nothing; locally extracted text is kept.</string>
     <string name="lens_vision_off">The image model has image input disabled; this run used node text only.</string>
     <string name="lens_question_translate">Translate the selected text into English (or Chinese if it is already English). Give only the translation and one short note.</string>
-    <string name="lens_ask_prefix">About what I just selected on screen:\n</string>
-    <string name="lens_ask_suffix">\n\nPlease help me with:</string>
+
+    <!-- Screen lens ask step (editable box + voice/typed question, analyze only on Understand) -->
+    <string name="lens_hint_ask">Adjust the box, then ask me</string>
+    <string name="lens_ask_hint_rect">Drag the box to move, corners/edges to resize</string>
+    <string name="lens_ask_placeholder">Ask anything — leave empty to just understand</string>
+    <string name="lens_followup_placeholder">Ask more… (optional)</string>
+    <string name="lens_ask_submit">Understand</string>
+    <string name="lens_asked_prefix">Your question: </string>
+    <string name="lens_attach_image">Screenshot</string>
+    <string name="lens_attach_text">Selected text</string>
+    <string name="lens_attach_remove">Remove attachment</string>
+    <string name="lens_attach_none">No attachments (answer from your question only)</string>
+    <string name="lens_ask_voice">Voice input</string>
+    <string name="lens_asr_listening">Listening… tap the mic to stop</string>
+    <string name="lens_asr_recognizing">Transcribing in the cloud…</string>
+    <string name="lens_asr_recognizing_local">Transcribing offline…</string>
+    <string name="lens_asr_failed">Voice input failed: %1$s (you can type instead)</string>
+    <string name="lens_asr_mic_denied">No microphone permission. Allow recording in system settings, or type instead.</string>
+    <string name="lens_asr_fallback_local">Cloud unreachable — switched to offline recognition, please say it again</string>
+    <string name="lens_asr_timeout">Voice recognition timed out</string>
+    <string name="lens_asr_empty">Didn\'t catch that — your text was kept</string>
+    <string name="lens_ask_open_failed">Could not open the question panel, please retry</string>
 
     <color name="voice_bg">#0F0E13</color>
     <color name="voice_accent">#8B5CF6</color>
