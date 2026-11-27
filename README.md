@@ -1,6 +1,6 @@
-# Hermes for Android
+# HermesApp — 手机端 AI Agent（增强版）
 
-[![Release](https://img.shields.io/badge/Release-v1.2.0-blue.svg)](https://github.com/SelectXn00b/HermesApp/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v2.0.9-blue.svg)](https://github.com/rtzhang1202/HermesApp/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://www.android.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,7 +8,39 @@
 
 1:1 复刻 [Hermes](https://github.com/nicepkg/hermes) 框架的 Kotlin 版 Agent Loop，嵌入 Android 平台，实现完整 AI Agent 能力：看屏幕、点 App、跑代码、连平台。
 
-**[详细文档](https://vcn23e479dhx.feishu.cn/wiki/UZtFwM6t9iArPVkMvRccwSran6d)** | **[快速开始](#快速开始)** | **[社区](#社区)**
+本仓库是**深度增强版**（`dev` 分支为增强主线），在上游基础上重点强化了 **语音助手、屏幕识别、系统能力调用、用户记忆** 四大方向，并做了全局品牌视觉统一。
+
+---
+
+## ⭐ 本版重点改进
+
+### 🎙 语音助手（Gemini / 超级小爱风格）
+- 全屏语音界面：深紫玻璃态 + 彩条波形 + 气泡对话 + 建议胶囊；支持**外部按键唤醒**（如 KeyPilot 长按 Essential 键）
+- **云端 ASR 优先**（429 退避、失败才本地兜底），中英语种锁定
+- **采集链路调敏 + 降噪**：自适应 VAD（30s 底噪 p80 分位 ×1.5，下限 80）+ `NoiseSuppressor` 硬降噪 + 上传前软件 AGC —— 弱声不漏字、静音零误触发
+- 单发对话模式（说完即停，不自动续听）+ 空回答兜底
+- 气泡内**图片真实渲染**（link 标签 / 本地路径 / markdown 三源，点击全屏）
+
+### 🔍 识别屏幕（Screen Lens）
+- 语音界面一键识屏：**圈选涂抹 / 点按自动框选 / 全屏**三种选择，进入可选态真机 P95 ≈ 7ms（不等识别先出交互）
+- 选框**可拖动、可改尺寸**；**先问后理解**——语音或打字提问（空输入即默认理解）；选中内容以**附件条**（缩略图 + 文字摘要）呈现，不挤占输入框
+- 识别结果面板：实体 / 动作 chips（提取文字、翻译、搜一下）、继续问
+- **「记住这个」**一键联动用户记忆（确认卡预填来源 = 屏幕识别）
+- **敏感拦截**：金融 / 支付 / 密码类应用在采集前直接阻断（不截屏、不读节点）
+
+### 🧠 用户记忆数据库
+- 独立于知识库的**用户断言库**（SQLite + 审计表）：证件、地址、偏好、账号、经历
+- 显式写入走**确认卡**（不静默入库）；冲突不覆盖（新旧并存、可择优采用）
+- 对话自动召回注入（`<user_memory>`，机密级**永不注入**，读写全程审计可追溯）
+- 记忆主页：搜索 / 分类 / 增删改查
+
+### 🧰 系统能力工具
+- 一等工具：`contacts` 通讯录增删查 · `gallery` 相册 · `file_manager` 文件搜索/复制/移动 · `settings` 亮度/音量/勿扰/蓝牙/Wi-Fi
+- **语义分工**：提醒 → 日历日程，闹钟 → 时钟；注入设备时间让模型正确换算"明天下午三点"
+- 真机零工具词自然问法实测全命中（模型自主选对工具，provider 侧回读验证）
+
+### 🎨 品牌视觉统一
+- 全局去除二次元 / 旧品牌元素，统一 Hermes 官方风格
 
 ---
 
@@ -21,17 +53,17 @@
 AI：→ 打开微信 → 搜索张三 → 输入消息 → 发送 ✅
 ```
 
+**语音随手问** — 长按按键唤起语音助手：问答、定闹钟、建提醒、查相册、调设置，一句话搞定。
+
+**看一眼就懂** — 识屏按钮圈出屏幕任意内容，提问、翻译、提取文字，或让 AI「记住这个」。
+
 **跨应用联动** — 微信收到地址 → 复制 → 打开高德 → 搜索 → 开始导航
 
 **执行代码** — 通过 Termux SSH 或内置 Shell 执行命令（Python/Node.js/Shell）
 
-**搜索 & 抓取网页** — Brave 搜索 + 网页全文抓取
-
 **多平台消息** — 飞书、Discord 远程控制手机 AI
 
 **MCP Server** — 将手机无障碍/截屏能力暴露给 Claude Desktop、Cursor 等外部 Agent
-
-**技能扩展** — 从 [ClawHub](https://clawhub.com) 安装新能力，或自己创建 Skill
 
 ---
 
@@ -39,47 +71,19 @@ AI：→ 打开微信 → 搜索张三 → 输入消息 → 发送 ✅
 
 ### 下载安装
 
-从 [Release 页面](https://github.com/SelectXn00b/HermesApp/releases/latest) 下载：
+从 [Release 页面](https://github.com/rtzhang1202/HermesApp/releases/latest) 下载 `HermesApp-v2.0.9.apk` 安装即可。
 
-| APK | 说明 | 必装？ |
-|-----|------|--------|
-| **Hermes** | 主应用（含无障碍服务、Agent、Gateway） | 必装 |
-| **BrowserForClaw** | AI 浏览器（网页自动化） | 可选 |
-
-> Termux 需从 [F-Droid](https://f-droid.org/packages/com.termux/) 单独安装（不要用 Play Store 版本）。不装也能用基础 shell 命令，装了有完整 Linux 环境。
+> 语音助手需授予麦克风权限；识屏需开启无障碍服务（HermesAccessibilityService）；系统能力工具建议授予通讯录/日历/文件等运行时权限。
 
 ### 3 步上手
 
-1. **安装** — 下载安装 Hermes
+1. **安装** — 下载安装 HermesApp
 2. **配置** — 打开 App，输入 API Key（或跳过使用内置 Key），开启无障碍 + 录屏权限
-3. **开聊** — 直接对话，或通过飞书/Discord 发消息
-
-> 首次打开自动弹出引导页，默认 OpenRouter + MiMo V2 Pro，支持一键跳过
+3. **开聊** — 直接对话、语音唤起，或通过飞书/Discord 发消息
 
 ---
 
-## 技术架构
-
-```
-┌──────────────────────────────────────────┐
-│  Channels                                 │
-│  飞书 · Discord · 设备内对话               │
-├──────────────────────────────────────────┤
-│  Agent Runtime                            │
-│  AgentLoop · 65+ Tools · 27 Skills ·      │
-│  Context 管理 · Memory · Skill Recorder   │
-├──────────────────────────────────────────┤
-│  Providers                                │
-│  OpenRouter · MiMo · Gemini · Anthropic · │
-│  OpenAI · 自定义 OpenAI 兼容              │
-├──────────────────────────────────────────┤
-│  Android Platform                         │
-│  Accessibility · Termux SSH · device tool │
-│  MediaProjection · BrowserForClaw         │
-└──────────────────────────────────────────┘
-```
-
-### 核心特性
+## 核心特性（上游基座）
 
 | 特性 | 说明 |
 |------|------|
@@ -90,9 +94,7 @@ AI：→ 打开微信 → 搜索张三 → 输入消息 → 发送 ✅
 | **Gateway SLOT 隔离** | 每个渠道消息通过独立 ChatRuntimeSlot.GATEWAY 处理，与主 UI 互不干扰 |
 | **Skill 体系** | 27 个内置 Skill，设备上可自由编辑，支持 ClawHub 在线安装 |
 | **Skill Recorder** | 录制用户操作步骤，AI 自动生成可复用的 Skill |
-| **多模型** | MiMo V2 Pro · DeepSeek R1 · Claude Sonnet 4 · Gemini 2.5 · GPT-4.1 |
 | **MCP Server** | 将无障碍/截屏能力暴露给外部 Agent（端口 8399，Streamable HTTP） |
-| **渠道模型覆盖** | 每个消息渠道可独立选择模型 |
 
 ---
 
@@ -103,127 +105,43 @@ AI：→ 打开微信 → 搜索张三 → 输入消息 → 发送 ✅
 | Tool | 功能 |
 |------|------|
 | `device` | 屏幕操作：snapshot / tap / type / scroll / press / open（Playwright 模式） |
-| `read_file` | 读取文件内容 |
-| `write_file` | 创建或覆盖文件 |
-| `edit_file` | 精确编辑文件（diff 模式） |
-| `list_dir` | 列出目录内容 |
+| `read_file` / `write_file` / `edit_file` / `list_dir` | 文件读写编辑 |
 | `exec` | 执行命令（Termux SSH / 内置 Shell） |
-| `web_search` | Brave 搜索引擎 |
-| `web_fetch` | 抓取网页内容 |
+| `web_search` / `web_fetch` | Brave 搜索 / 网页抓取 |
 | `javascript` | 执行 JavaScript（QuickJS） |
 | `tts` | 文本转语音 |
-| `skills_search` | 搜索 ClawHub 技能 |
-| `skills_install` | 从 ClawHub 安装技能 |
-| `config_get` / `config_set` | 读写配置项 |
-| `memory_search` / `memory_get` | 语义搜索/读取记忆 |
+| `skills_search` / `skills_install` | ClawHub 技能搜索 / 安装 |
+| `memory_search` / `memory_get` | 语义搜索/读取知识库记忆 |
+| **`memory_save` / `memory_search`（用户记忆）** | 关于用户本人事实的存取（确认卡机制，区别于知识库） |
 
-### Android 专属 Tools
+### Android 专属 Tools（含本版新增）
 
 | Tool | 功能 |
 |------|------|
-| `list_installed_apps` | 列出已安装应用 |
-| `install_app` | 安装 APK |
-| `start_activity` | 启动 Activity |
-| `feishu_send_image` | 通过飞书发送图片 |
-| `eye` | 摄像头拍照 |
-| `log` | 查看系统日志 |
-| `stop` | 停止 Agent |
+| `list_installed_apps` / `install_app` / `start_activity` | 应用管理 |
+| `contacts`（新） | 通讯录：查询 / 添加 / 删除 |
+| `gallery`（新） | 相册：近期图片/视频 |
+| `file_manager`（新） | 文件搜索 / 复制 / 移动 |
+| `settings`（新） | 亮度 / 音量 / 勿扰 / 蓝牙 / Wi-Fi |
+| `alarm` / `calendar` | 闹钟（叫醒）/ 日历日程（提醒、会议） |
+| `eye` / `log` / `stop` | 摄像头拍照 / 系统日志 / 停止 Agent |
 
-### 飞书 Tools（39 个）
-
-| 类别 | 说明 |
-|------|------|
-| 文档 | 获取 / 创建 / 更新 / 媒体 / 评论 |
-| Wiki | 空间 / 节点 |
-| 云盘 | 文件操作 |
-| 多维表格 | 应用 / 表 / 字段 / 记录 / 视图 |
-| 任务 | 任务 / 子任务 / 评论 |
-| 群聊 | 群管理 / 成员管理 |
-| 日历 | 日历 / 事件 / 忙闲查询 |
-| 消息 | 发消息 / 搜索消息 / 资源 |
-| 搜索 | 搜索文档 / Wiki |
-
-### 27 个 Skills
-
-| 类别 | Skills |
-|------|--------|
-| 飞书全家桶 | `feishu` · `feishu-doc` · `feishu-wiki` · `feishu-drive` · `feishu-bitable` · `feishu-chat` · `feishu-task` · `feishu-perm` · `feishu-urgent` · `feishu-calendar` · `feishu-common` · `feishu-im` · `feishu-search` · `feishu-sheets` |
-| 搜索 & 网页 | `browser` · `weather` · `lark-cli` |
-| 技能管理 | `clawhub` · `skill-creator` |
-| 开发调试 | `debugging` · `data-processing` · `session-logs` · `context-security` |
-| 配置管理 | `model-config` · `channel-config` · `install-app` · `model-usage` |
-
-> Skills 存储在 `/sdcard/.hermes/skills/`，可自由编辑、添加、删除。
-
-### 消息渠道
-
-| 渠道 | 状态 | 功能 |
-|------|------|------|
-| **飞书** | 可用 | WebSocket 实时连接，群聊/私聊，39 个飞书工具，流式卡片回复 |
-| **Discord** | 可用 | Gateway v10，群聊/私聊，DM 策略管理 |
-| **设备内对话** | 可用 | 内置聊天界面，多 session 管理 |
-| **Telegram** | 开发中 | — |
-| **Slack** | 开发中 | — |
-
-### 支持的模型
-
-| Provider | 模型 | 说明 |
-|----------|------|------|
-| **OpenRouter** | MiMo V2 Pro, Hunter Alpha, DeepSeek R1, Claude Sonnet 4, GPT-4.1 | 推荐，内置 Key |
-| **小米 MiMo** | MiMo V2 Pro, MiMo V2 Flash, MiMo V2 Omni | 直连小米 API |
-| **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash | 直连 |
-| **Anthropic** | Claude Sonnet 4, Claude Opus 4 | 直连 |
-| **OpenAI** | GPT-4.1, GPT-4.1 Mini, o3 | 直连 |
-| **自定义** | 任何 OpenAI 兼容 API | Ollama, vLLM 等 |
-
-> **默认配置**：OpenRouter + MiMo V2 Pro（1M 上下文 + 推理），跳过引导页自动使用内置 Key。
-
----
-
-## 配置参考
-
-`/sdcard/.hermes/config/openclaw.json`
-
-```json
-{
-  "models": {
-    "providers": {
-      "openrouter": {
-        "baseUrl": "https://openrouter.ai/api/v1",
-        "apiKey": "sk-or-v1-你的key",
-        "models": [{"id": "xiaomi/mimo-v2-pro", "reasoning": true, "contextWindow": 1048576}]
-      }
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": { "primary": "openrouter/xiaomi/mimo-v2-pro" }
-    }
-  },
-  "channels": {
-    "feishu": { "enabled": true, "appId": "cli_xxx", "appSecret": "xxx" },
-    "discord": {
-      "enabled": true,
-      "botToken": "your-discord-bot-token",
-      "model": "openrouter/xiaomi/mimo-v2-pro"
-    }
-  }
-}
-```
-
-详细配置参考 **[飞书文档](https://vcn23e479dhx.feishu.cn/wiki/UZtFwM6t9iArPVkMvRccwSran6d)**
+> 消息渠道（飞书 39 工具 / Discord / 设备内对话）、27 Skills、模型 Provider、配置参考等与上游一致，详见 **[完整文档](https://vcn23e479dhx.feishu.cn/wiki/UZtFwM6t9iArPVkMvRccwSran6d)** 与 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ---
 
 ## 从源码构建
 
 ```bash
-git clone https://github.com/SelectXn00b/HermesApp.git
+# Windows（JDK 21，勿用 sh 包装器）
+git clone https://github.com/rtzhang1202/HermesApp.git
 cd HermesApp
-export JAVA_HOME=/path/to/jdk21
-./gradlew assembleRelease
-adb install app/build/outputs/apk/release/app-release.apk
+./gradlew.bat assembleDebug
+# APK 产出：app/build/outputs/apk/debug/app-debug.apk
 ```
+
+- 分支：`dev` = 增强主线（日常工作分支）；`main` = 上游 + 基建修复
+- 提交规范：`[mod]` 魔改 / `[up]` 同步上游 / `[fix]` 缺陷修复
 
 ---
 
@@ -232,56 +150,12 @@ adb install app/build/outputs/apk/release/app-release.apk
 | 项目 | 说明 |
 |------|------|
 | [Hermes](https://github.com/nicepkg/hermes) | AI Agent 框架（桌面端） |
-| [Hermes for Android](https://github.com/SelectXn00b/HermesApp) | Hermes Android 客户端（本项目） |
-
----
+| [Hermes for Android](https://github.com/SelectXn00b/HermesApp) | 上游基座 |
 
 ## 社区
 
-<div align="center">
-
-#### 飞书群
-
-[![加入飞书群](docs/images/feishu-qrcode.jpg)](https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=566r8836-6547-43e0-b6be-d6c4a5b12b74)
-
-**[点击加入飞书群](https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=566r8836-6547-43e0-b6be-d6c4a5b12b74)**
-
----
-
-#### Discord
-
-[![Discord](https://img.shields.io/badge/Discord-加入服务器-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/rDpaFym2b8)
-
-**[加入 Discord](https://discord.gg/rDpaFym2b8)**
-
----
-
-#### 微信群
-
-<img src="docs/images/wechat-qrcode.png" width="300" alt="微信群二维码">
-
-**扫码加入微信群（AndroidClaw）** - 5月17日前有效
-
-</div>
-
----
-
-## 相关链接
-
-- [Hermes](https://github.com/nicepkg/hermes) — 架构参照
-- [ClawHub](https://clawhub.com) — 技能市场
-- [架构文档](ARCHITECTURE.md) — 详细设计
-
----
+使用问题与需求请提 [Issue](https://github.com/rtzhang1202/HermesApp/issues)。
 
 ## License
 
-MIT — [LICENSE](LICENSE)
-
----
-
-<div align="center">
-
-**如果这个项目对你有帮助，请给个 Star 支持开源！**
-
-</div>
+[MIT](LICENSE)
