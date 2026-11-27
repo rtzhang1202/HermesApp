@@ -56,6 +56,39 @@
     <string name="voice_suggestion_2">Write me a Python script</string>
     <string name="voice_suggestion_3">Tell me a joke</string>
 
+    <!-- Screen lens: voice button + full-screen lasso + result sheet -->
+    <string name="lens_title">Identify screen</string>
+    <string name="lens_close">Close</string>
+    <string name="lens_hint_select">Lasso or tap what you want identified</string>
+    <string name="lens_hint_reading">Reading the screen…</string>
+    <string name="lens_action_full">Whole screen</string>
+    <string name="lens_action_reselect">Select again</string>
+    <string name="lens_result_title">Result</string>
+    <string name="lens_analyzing">Understanding this…</string>
+    <string name="lens_extracted_label">Recognized text</string>
+    <string name="lens_copy">Copy</string>
+    <string name="lens_copied">Copied</string>
+    <string name="lens_extract">Extract text</string>
+    <string name="lens_translate">Translate</string>
+    <string name="lens_remember">Remember this</string>
+    <string name="lens_search">Search</string>
+    <string name="lens_continue_ask">Ask more</string>
+    <string name="lens_nothing_to_remember">Nothing to identify</string>
+    <string name="lens_no_accessibility">Accessibility service is off, so the screen cannot be read. Enable the Hermes accessibility service and retry.</string>
+    <string name="lens_open_settings">Open settings</string>
+    <string name="lens_capture_failed">Screenshot failed: %1$s</string>
+    <string name="lens_blocked_title">Identification blocked</string>
+    <string name="lens_blocked_body">%1$s is a sensitive screen; nothing was read or uploaded.</string>
+    <string name="lens_blocked_close">Got it</string>
+    <string name="lens_saved_pending">Memory created — confirm to save</string>
+    <string name="lens_memory_failed">Failed to write memory: %1$s</string>
+    <string name="lens_memory_title_prefix">Screen: </string>
+    <string name="lens_model_failed">The model returned nothing; locally extracted text is kept.</string>
+    <string name="lens_vision_off">The image model has image input disabled; this run used node text only.</string>
+    <string name="lens_question_translate">Translate the selected text into English (or Chinese if it is already English). Give only the translation and one short note.</string>
+    <string name="lens_ask_prefix">About what I just selected on screen:\n</string>
+    <string name="lens_ask_suffix">\n\nPlease help me with:</string>
+
     <color name="voice_bg">#0F0E13</color>
     <color name="voice_accent">#8B5CF6</color>
     <color name="voice_accent_light">#A78BFA</color>

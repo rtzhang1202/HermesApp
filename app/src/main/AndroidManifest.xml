@@ -319,6 +319,9 @@
             </intent-filter>
         </activity>
 
+        <!-- 识屏层（Screen Lens）用无障碍悬浮窗实现（TYPE_ACCESSIBILITY_OVERLAY，不抢焦点），
+             这样目标应用仍是活动窗口，节点树可读；UI 由 voice/lens/ScreenLensController 挂载。 -->
+
         <!-- Broadcast wake entry for external key apps (KeyPilot) -->
         <receiver
             android:name=".voice.VoiceWakeReceiver"

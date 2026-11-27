@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Send
@@ -85,7 +86,8 @@ private val WaveColors = listOf(
 @Composable
 fun VoiceAssistantScreen(
     controller: VoiceAssistantController,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onScreenLens: () -> Unit = {}
 ) {
     val phase by controller.phase.collectAsState()
     val bubbles by controller.bubbles.collectAsState()
@@ -355,6 +357,23 @@ fun VoiceAssistantScreen(
                             .clickable { controller.setTextMode(true) }
                             .padding(horizontal = 6.dp, vertical = 12.dp)
                     )
+                    // 识别屏幕：在麦克风钮旁，按下即进入全屏圈选态（不等任何识别）
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .background(VoiceGlass, CircleShape)
+                            .border(1.dp, Color(0x338B5CF6), CircleShape)
+                            .clickable { onScreenLens() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.CenterFocusStrong,
+                            contentDescription = stringResource(R.string.lens_title),
+                            tint = VoiceAccentLight,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
                             .size(46.dp)

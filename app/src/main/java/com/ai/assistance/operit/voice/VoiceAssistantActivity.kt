@@ -54,9 +54,31 @@ class VoiceAssistantActivity : ComponentActivity() {
         setContent {
             VoiceAssistantScreen(
                 controller = controller,
-                onClose = { finish() }
+                onClose = { finish() },
+                onScreenLens = { openScreenLens() }
             )
         }
+    }
+
+    /**
+     * 识别屏幕：语音界面是全屏的，它盖住目标应用时既截不到「底下那一屏」，无障碍也读不到它的窗口。
+     * 唤起识屏悬浮窗（TYPE_ACCESSIBILITY_OVERLAY，不抢焦点）后立即 finish 自己，
+     * 目标应用回到前台 —— 悬浮窗随后轮询到它的节点树并截屏。
+     * tapT0 传下去用于「按下→可选态」的可信计时。
+     */
+    private fun openScreenLens() {
+        val tapT0 = android.os.SystemClock.uptimeMillis()
+        AppLogger.d(TAG, "screen lens requested")
+        try {
+            com.ai.assistance.operit.voice.lens.ScreenLensController
+                .getInstance(applicationContext)
+                .show(tapT0)
+        } catch (t: Throwable) {
+            AppLogger.w(TAG, "open screen lens failed: ${t.message}")
+            return
+        }
+        finish()
+        overridePendingTransition(0, 0)
     }
 
     override fun onNewIntent(intent: Intent) {
